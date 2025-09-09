@@ -1,0 +1,47 @@
+.upload-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.upload-title {
+  display: grid;
+  gap: 4px;
+  text-align: center;
+}
+
+.pill {
+  background: #10151f;
+  border: 1px solid var(--panel-border);
+  color: var(--accent);
+  font-weight: 600;
+  width: 60%;
+  padding: 4px 8px;
+  border-radius: 999px;
+  text-align: center;
+  margin: auto;
+}
+
+.upload-actions {
+  display: flex;
+  gap: 8px;
+  margin: auto;
+}
+
+.upload-meta {
+  margin-top: 8px;
+  text-align: center;
+}
+
+.meta-grid {
+  display: grid;
+  gap: 6px;
+  font-size: 14px;
+  text-align: center;
+}
+
+.placeholder {
+  color: var(--muted);
+  font-size: 14px;
+}

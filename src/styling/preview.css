@@ -1,0 +1,61 @@
+.preview-container {
+  display: grid;
+  gap: 10px;
+}
+
+.players {
+  display: grid;
+  gap: 10px;
+}
+
+.player {
+  position: relative;
+  background: #0b0f15;
+  border: 1px solid var(--panel-border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.player video {
+  width: 100%;
+  height: auto;
+  background: #000;
+}
+
+.video-placeholder {
+  padding: 24px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.hud {
+  position: absolute;
+  left: 8px;
+  bottom: 8px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  background: rgba(0, 0, 0, 0.45);
+  padding: 6px 8px;
+  border-radius: 10px;
+  backdrop-filter: blur(4px);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.hud .tag {
+  font-weight: 700;
+  color: var(--brand);
+}
+
+.hud .time {
+  font-family: var(--font-numeric);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.4px;
+  font-weight: 700;
+}
+
+.controls {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
