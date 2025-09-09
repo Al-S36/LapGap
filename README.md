@@ -14,14 +14,20 @@ If you are developing a production application, we recommend using TypeScript wi
 
 # Change log
 
+## [0.1.2] - 2025-09-09
+- Optimization: Play back time is now smooth and increases by 0.001ms rather than chunks
+- UX: Made the live delta and final gap to 3 decimal places for consistancy
+- UI: Made the live delta and final gap white if at 0
+- Bug: Fixed pause and play synchronization issue
+
+## [0.1.1] - 2025-09-09
+- Feature: Added FPS as part of the meta data using mediainfo
+
+## [0.1.1] - 2025-09-09
+- Build: Changed port to 8080
+
 ## [0.1] - 2025-09-09
 - Initizalied the React Web app with basic functions
 - Feature: User can upload videos and view meta data
 - Feature: User can play pause and reset the previewed video
 - Feature: The lap time for both laps have been pulled, and the final gap is calculated
-
-## [0.1.1] - 2025-09-09
-- Build: Changed port to 8080
-
-## [0.2.0] - 2025-09-09
-- Feature: Added FPS as part of the meta data using mediainfo

@@ -17,9 +17,20 @@ export default function StatsStrip({ lapTimeA, lapTimeB, liveDelta }) {
   // Calculates the final gap between two laps
   const finalGap = (lapTimeB || 0) - (lapTimeA || 0);
   // Formats the gap to be s.mm no matter if positive or negative
-  const formatGap = (n) => (n >= 0 ? `+${n.toFixed(2)}` : n.toFixed(2));
+  const formatGap = (n) => {
+    if (!Number.isFinite(n)) return "0.000";
+    if (n === 0) return "0.000";
+    return n > 0 ? `+${n.toFixed(3)}` : n.toFixed(3);
+  };
 
-  return (
+  // Helper to pick className: neutral for 0
+  const deltaClass = (n) => {
+    if (!Number.isFinite(n) || n === 0) return "";
+    return n > 0 ? "warning" : "success";
+  };
+
+
+return (
     <div className="stats-container">
       <div className="stat">
         <div className="stat-label">Lap Time A</div>
@@ -31,13 +42,13 @@ export default function StatsStrip({ lapTimeA, lapTimeB, liveDelta }) {
       </div>
       <div className="stat">
         <div className="stat-label">Live Delta (B vs A)</div>
-        <div className={`stat-value ${liveDelta >= 0 ? "warning" : "success"}`}>
+        <div className={`stat-value ${deltaClass(liveDelta)}`}>
           {formatGap(liveDelta)} seconds
         </div>
       </div>
       <div className="stat">
         <div className="stat-label">Final Gap</div>
-        <div className={`stat-value ${finalGap >= 0 ? "warning" : "success"}`}>
+        <div className={`stat-value ${deltaClass(finalGap)}`}>
           {formatGap(finalGap)} seconds
         </div>
       </div>

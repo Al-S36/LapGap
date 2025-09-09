@@ -13,21 +13,37 @@ export default function VideoPreview({ videoA, videoB }) {
 
   // Keep track of current playback time for each video
   useEffect(() => {
-    const playerA = videoARef.current;
-    const playerB = videoBRef.current;
-    if (!playerA || !playerB) return;
-
-    const handleTimeUpdateA = () => setTimeA(playerA.currentTime || 0);
-    const handleTimeUpdateB = () => setTimeB(playerB.currentTime || 0);
-
-    playerA.addEventListener("timeupdate", handleTimeUpdateA);
-    playerB.addEventListener("timeupdate", handleTimeUpdateB);
-
-    return () => {
-      playerA.removeEventListener("timeupdate", handleTimeUpdateA);
-      playerB.removeEventListener("timeupdate", handleTimeUpdateB);
+    let rafId;
+    const update = () => {
+      if (videoARef.current) setTimeA(videoARef.current.currentTime || 0);
+      if (videoBRef.current) setTimeB(videoBRef.current.currentTime || 0);
+      rafId = requestAnimationFrame(update);
     };
-  }, [videoA, videoB]);
+    rafId = requestAnimationFrame(update);
+    return () => cancelAnimationFrame(rafId);
+  }, []);
+
+  // Waits until a video is ready to play (metadata + decode)
+  const videoIsLoaded = (video) =>
+    new Promise((resolve) => {
+      if (!video) return resolve();
+      if (video.readyState >= 2) return resolve(); 
+      const onCanPlay = () => {
+        video.removeEventListener("canplay", onCanPlay);
+        resolve();
+      };
+      video.addEventListener("canplay", onCanPlay);
+    });
+
+  // snap B to A on the very first decoded frame after resume
+  const snapOnFirstFrame = () => {
+    const a = videoARef.current,
+      b = videoBRef.current;
+    if (!a || !b || typeof a.requestVideoFrameCallback !== "function") return;
+    a.requestVideoFrameCallback(() => {
+      b.currentTime = a.currentTime;
+    });
+  };
 
   // Time formater, takes the lap time and formats it in mm:ss:mmm
   const timeFormatter = (lapTime) => {
@@ -43,23 +59,36 @@ export default function VideoPreview({ videoA, videoB }) {
 
   // Playback controls
   const playBoth = async () => {
-    try {
-      await videoARef.current?.play();
-    } catch {}
-    try {
-      await videoBRef.current?.play();
-    } catch {}
+    const a = videoARef.current,
+      b = videoBRef.current;
+    if (!a || !b) return;
+
+    // make sure both have data ready
+    await Promise.all([videoIsLoaded(a), videoIsLoaded(b)]);
+    // start from the exact same timestamp
+    b.currentTime = a.currentTime;
+    // reset correction state
+    b.playbackRate = 1;
+    // eliminate start jitter on the first decoded frame
+    snapOnFirstFrame();
+
+    await Promise.allSettled([a.play(), b.play()]);
   };
 
   const pauseBoth = () => {
-    videoARef.current?.pause();
-    videoBRef.current?.pause();
+    const a = videoARef.current,
+      b = videoBRef.current;
+    a?.pause();
+    b?.pause();
+    if (a && b) b.currentTime = a.currentTime;
   };
 
   const resetBoth = () => {
     pauseBoth();
     if (videoARef.current) videoARef.current.currentTime = 0;
     if (videoBRef.current) videoBRef.current.currentTime = 0;
+    setTimeA(0);
+    setTimeB(0);
   };
 
   return (
@@ -69,7 +98,12 @@ export default function VideoPreview({ videoA, videoB }) {
         <div className="player">
           {videoA?.url ? (
             <>
-              <video ref={videoARef} src={videoA.url} playsInline />
+              <video
+                ref={videoARef}
+                src={videoA.url}
+                playsInline
+                preload="auto"
+              />
               <div className="hud">
                 <div className="tag">Car A</div>
                 <div className="time">
@@ -86,7 +120,12 @@ export default function VideoPreview({ videoA, videoB }) {
         <div className="player">
           {videoB?.url ? (
             <>
-              <video ref={videoBRef} src={videoB.url} playsInline />
+              <video
+                ref={videoBRef}
+                src={videoB.url}
+                playsInline
+                preload="auto"
+              />
               <div className="hud">
                 <div className="tag">Car B</div>
                 <div className="time">
