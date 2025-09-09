@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import getFps from "./services/getFps";
 
 // Responsible for the Upload section, allows the user to add the two videos
 // and pulls all the meta data from the videos, it then sends the data to preview and stats
@@ -8,35 +9,72 @@ export default function UploadArea({ label = "Car", hint, onLoaded }) {
   const fileInputRef = useRef(null);
   // Store the vidoe metadata
   const [videoMetadata, setVideoMetadata] = useState(null);
-  // Sore the title of the video
+  // Store the title of the video
   const [titleText, setTitleText] = useState(label);
+  // Keeps trak of the last URL so metadata updates only with the latest files data
+  const lastObjectUrlRef = useRef(null);
 
+  // Sets video name to the title
   useEffect(() => {
     setTitleText(label);
   }, [label]);
 
-  // Open and choose video from computer
+  const revokeLastUrl = () => {
+    if (lastObjectUrlRef.current) {
+      URL.revokeObjectURL(lastObjectUrlRef.current);
+      lastObjectUrlRef.current = null;
+    }
+  };
+
   const openFilePicker = () => fileInputRef.current?.click();
-  const handleFileChange = (event) => {
+  const handleFileChange = async (event) => {
     const selectedFile = event.target.files?.[0] || null;
+    // Handle if no file was selected
     if (!selectedFile) {
+      revokeLastUrl();
       setVideoMetadata(null);
       onLoaded?.(null);
       return;
     }
 
-    // Video meta data
+    // Preparing the new file
+    revokeLastUrl();
     const objectUrl = URL.createObjectURL(selectedFile);
+    lastObjectUrlRef.current = objectUrl;
+
+    // Retrieving the videos metadata
     const tempVideo = document.createElement("video");
     tempVideo.preload = "metadata";
     tempVideo.src = objectUrl;
-    tempVideo.onloadedmetadata = () => {
+
+    // Storing the blob URL of the video being processed
+    const token = objectUrl;
+
+    // Once the metadata loads it retrieves and stores the data
+    tempVideo.onloadedmetadata = async () => {
+      // Attempting to get the FPS data
+      let fpsInfo = { fps: null, mode: null, source: null };
+      try {
+        fpsInfo = (await getFps(selectedFile)) || fpsInfo;
+      } catch {
+        // Keeps FPS null if anything fails
+      }
+
+      // If user already picked another file during this time it causes the code to exit and ignore the irrelevent data
+      if (lastObjectUrlRef.current !== token) return;
+      // Building the metadata
       const metadata = {
         file: selectedFile,
         url: objectUrl,
         duration: tempVideo.duration || 0,
         width: tempVideo.videoWidth || 0,
         height: tempVideo.videoHeight || 0,
+        fps:
+          typeof fpsInfo.fps === "number"
+            ? Number(fpsInfo.fps.toFixed(3))
+            : null,
+        fpsMode: fpsInfo.mode || null, // either Constant or Variable frame rate
+        fpsSource: fpsInfo.source || null, // was the FPS from the source or estimated
         title: titleText,
       };
       setVideoMetadata(metadata);
@@ -55,6 +93,13 @@ export default function UploadArea({ label = "Car", hint, onLoaded }) {
       "0"
     )}.${String(milliseconds).padStart(3, "0")}`;
   };
+
+  // When component unmounts, revoke the last created object
+  useEffect(() => {
+    return () => {
+      revokeLastUrl();
+    };
+  }, []);
 
   return (
     <div className="upload-container">
@@ -102,6 +147,22 @@ export default function UploadArea({ label = "Car", hint, onLoaded }) {
             <div>
               <strong>Resolution:</strong> {videoMetadata.width}×
               {videoMetadata.height}px
+            </div>
+            <div>
+              <strong>FPS:</strong>{" "}
+              {videoMetadata.fps ? (
+                <>
+                  {videoMetadata.fps} fps
+                  {videoMetadata.fpsMode ? ` (${videoMetadata.fpsMode})` : ""}
+                  {videoMetadata.fpsSource === "container" &&
+                  videoMetadata.isNominal
+                    ? " • nominal"
+                    : ""}
+                  {videoMetadata.fpsSource === "playback" ? " - estimated" : ""}
+                </>
+              ) : (
+                <span className="muted">—</span>
+              )}
             </div>
           </div>
         ) : (
