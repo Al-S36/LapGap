@@ -1,7 +1,7 @@
 import { useState } from "react";
 import Header from "./components/Header.jsx";
 import UploadArea from "./components/UploadArea.jsx";
-import VideoPreview from "./components/VideoPreview.jsx";
+import VideoPreview from "./components/videoPreview.jsx";
 import StatsStrip from "./components/StatsStrip.jsx";
 import Footer from "./components/Footer.jsx";
 
@@ -20,6 +20,8 @@ export default function App() {
   const [titleA] = useState("Car A");
   const [titleB] = useState("Car B");
 
+  const [liveDelta, setLiveDelta] = useState(0);
+
   return (
     <div className="home-page">
       <Header />
@@ -27,26 +29,30 @@ export default function App() {
       <main className="container">
         <section className="card responsive-grid-2">
           <UploadArea
-            label= "Car A"
+            label="Car A"
             hint="Upload the faster lap here"
             onLoaded={(m) => setVideoA(m ? { ...m, title: titleA } : null)}
           />
           <UploadArea
-            label= "Car B"
+            label="Car B"
             hint="Upload the slower lap here"
             onLoaded={(m) => setVideoB(m ? { ...m, title: titleB } : null)}
           />
         </section>
 
         <section className="card">
-          <VideoPreview videoA={videoA} videoB={videoB} />
+          <VideoPreview
+            videoA={videoA}
+            videoB={videoB}
+            onDelta={setLiveDelta}
+          />
         </section>
 
         <section className="card">
           <StatsStrip
             lapTimeA={videoA?.duration ?? 0}
             lapTimeB={videoB?.duration ?? 0}
-            liveDelta={0}
+            liveDelta={liveDelta}
           />
         </section>
       </main>

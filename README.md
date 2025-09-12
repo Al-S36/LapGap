@@ -14,13 +14,18 @@ If you are developing a production application, we recommend using TypeScript wi
 
 # Change log
 
+## [0.2] - 2025-09-09
+- Feature: Added refrence mode which allows users to manually set anchor pionts during their lap
+- Optimization: created timeFormatter.js to reduce duplicate code
+- UX: added overlay feature that allows the videos to be overlayed as it made it easier to add the anchor points
+- UI: added controls for the user to +- by 1 frame or 0.1s
+s
+
 ## [0.1.2] - 2025-09-09
 - Optimization: Play back time is now smooth and increases by 0.001ms rather than chunks
 - UX: Made the live delta and final gap to 3 decimal places for consistancy
 - UI: Made the live delta and final gap white if at 0
 - Bug: Fixed pause and play synchronization issue
-
-## [0.1.1] - 2025-09-09
 - Feature: Added FPS as part of the meta data using mediainfo
 
 ## [0.1.1] - 2025-09-09

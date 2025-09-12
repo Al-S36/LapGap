@@ -1,3 +1,4 @@
+/* layout containers */
 .preview-container {
   display: grid;
   gap: 10px;
@@ -8,6 +9,7 @@
   gap: 10px;
 }
 
+/* shared player shell */
 .player {
   position: relative;
   background: #0b0f15;
@@ -16,18 +18,21 @@
   overflow: hidden;
 }
 
+/* Video area */
 .player video {
   width: 100%;
   height: auto;
   background: #000;
 }
 
+/* placeholders */
 .video-placeholder {
   padding: 24px;
   color: var(--muted);
   text-align: center;
 }
 
+/* HUD */
 .hud {
   position: absolute;
   left: 8px;
@@ -42,11 +47,25 @@
   border: 1px solid rgba(255, 255, 255, 0.06);
 }
 
+/* HUD variants/positions */
+.hud-br {              
+  left: auto;
+  right: 8px;
+  top: auto;
+  bottom: 8px;
+}
+
+.hud-stack2 {      
+  bottom: 44px;
+}
+
+/* HUD content */
 .hud .tag {
   font-weight: 700;
   color: var(--brand);
 }
 
+/* HUD time */
 .hud .time {
   font-family: var(--font-numeric);
   font-variant-numeric: tabular-nums;
@@ -54,8 +73,26 @@
   font-weight: 700;
 }
 
+/* playback controls row */
 .controls {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
+}
+
+/* overlay mode */
+.overlay-stack {
+  position: relative;
+}
+
+/* the top overlayed video (absolute, covers) */
+.overlay-top {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  mix-blend-mode: normal;
+  pointer-events: none;
+  opacity: var(--overlay-alpha, 0.5); 
 }
