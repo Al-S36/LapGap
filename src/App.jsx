@@ -2,8 +2,9 @@ import { useState } from "react";
 import Header from "./components/Header.jsx";
 import UploadArea from "./components/UploadArea.jsx";
 import VideoPreview from "./components/videoPreview.jsx";
-import StatsStrip from "./components/StatsStrip.jsx";
+import StatsStrip from "./components/statsStrip.jsx";
 import Footer from "./components/Footer.jsx";
+import DeltaCard from "./components/deltaCard.jsx";
 
 // styling
 import "./styling/base.css";
@@ -12,6 +13,7 @@ import "./styling/navBars.css";
 import "./styling/upload.css";
 import "./styling/preview.css";
 import "./styling/stats.css";
+import "./styling/delta.css"; 
 
 export default function App() {
   const [videoA, setVideoA] = useState(null);
@@ -38,6 +40,10 @@ export default function App() {
             hint="Upload the slower lap here"
             onLoaded={(m) => setVideoB(m ? { ...m, title: titleB } : null)}
           />
+        </section>
+
+        <section className="card">
+          <DeltaCard totalDelta={liveDelta}/>
         </section>
 
         <section className="card">

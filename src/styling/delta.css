@@ -1,0 +1,142 @@
+/* component container */
+.delta-card {
+  display: grid;
+  gap: 10px;
+}
+
+.card .delta-card {
+  padding: 2px 0 0;
+}
+
+/* header */
+.delta-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.delta-title {
+  font-weight: 600;
+  letter-spacing: 0.2px;
+}
+
+.delta-value {
+  font-weight: 700;
+  font-size: 26px;
+}
+
+/* faster delta */
+.delta-value.success {
+  color: #1b8f3a;
+}
+
+/* slower detla */
+.delta-value.warning {
+  color: #c83d3d;
+}
+
+.delta-bar {
+  position: relative;
+  width: 100%;
+  height: 18px;
+  border-radius: 999px;
+  background: var(--delta-bg, #0f1320);
+  display: grid;
+  grid-template-columns: 1fr 2px 1fr;
+  overflow: hidden;
+
+  contain: layout paint;
+  backface-visibility: hidden;
+  transform: translateZ(0);
+}
+
+.delta-half {
+  position: relative;
+  overflow: hidden;
+}
+.delta-left {
+  border-top-left-radius: 999px;
+  border-bottom-left-radius: 999px;
+}
+.delta-right {
+  border-top-right-radius: 999px;
+  border-bottom-right-radius: 999px;
+}
+
+.delta-fill {
+  position: absolute;
+  inset: 0;
+  transform: scaleX(0);
+  transition: transform 110ms ease-out, opacity 110ms ease-out;
+  will-change: transform, opacity;
+}
+
+.delta-fill.negative {
+  transform-origin: right center;
+  background: linear-gradient(
+    to left,
+    rgba(27, 143, 58, var(--fill-alpha-strong, 0.55)),
+    rgba(27, 143, 58, var(--fill-alpha-weak, 0.2))
+  );
+}
+
+.delta-fill.positive {
+  transform-origin: left center;
+  background: linear-gradient(
+    to right,
+    rgba(200, 61, 61, var(--fill-alpha-strong, 0.55)),
+    rgba(200, 61, 61, var(--fill-alpha-weak, 0.2))
+  );
+}
+
+/* center zero line */
+.delta-center-line {
+  width: 2px;
+  background: rgba(255, 255, 255, 0.18);
+}
+
+.delta-scale {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  opacity: 0.75;
+  font-variant-numeric: tabular-nums;
+}
+
+.delta-roc {
+  font-size: 13px;
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+}
+
+.delta-roc .muted {
+  opacity: 0.75;
+}
+.delta-roc strong.success {
+  color: #1b8f3a;
+}
+.delta-roc strong.warning {
+  color: #c83d3d;
+}
+
+/* responsive adjustments */
+@media (max-width: 720px) {
+  .delta-bar {
+    height: 16px;
+  }
+  .delta-scale {
+    font-size: 11px;
+  }
+  .delta-roc {
+    font-size: 12px;
+  }
+}
+
+/* reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .delta-fill {
+    transition: none !important;
+  }
+}

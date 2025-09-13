@@ -14,12 +14,15 @@ If you are developing a production application, we recommend using TypeScript wi
 
 # Change log
 
-## [0.2] - 2025-09-09
+## [0.2.1] - 2025-09-13
+- Feature: Added delta bar
+- UX: users can easily know if they are faster or slower while watching the video without looking at the delta number itslef
+
+## [0.2] - 2025-09-12
 - Feature: Added refrence mode which allows users to manually set anchor pionts during their lap
 - Optimization: created timeFormatter.js to reduce duplicate code
 - UX: added overlay feature that allows the videos to be overlayed as it made it easier to add the anchor points
 - UI: added controls for the user to +- by 1 frame or 0.1s
-s
 
 ## [0.1.2] - 2025-09-09
 - Optimization: Play back time is now smooth and increases by 0.001ms rather than chunks
