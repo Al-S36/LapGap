@@ -5,7 +5,7 @@ import { clamp, buildWarp, mapAtoB } from "./services/mapping";
 
 // Shows two side-by-side video players (Car A and Car B),
 // tracks their playback progress, and provides simple playback controls.
-export default function VideoPreview({ videoA, videoB, onDelta }) {
+export default function VideoPreview({ videoA, videoB, onDelta, onAnchors }) {
   // References to each video element
   const videoARef = useRef(null);
   const videoBRef = useRef(null);
@@ -39,6 +39,8 @@ export default function VideoPreview({ videoA, videoB, onDelta }) {
     if (videoB) videoB.muted = !!isMutedB;
   }, [isMutedA, isMutedB]);
 
+  const prevDeltaRef = useRef(null);
+
   // Keep track of current playback time for each video
   useEffect(() => {
     let rafId;
@@ -49,23 +51,37 @@ export default function VideoPreview({ videoA, videoB, onDelta }) {
       if (videoA) setTimeA(videoA.currentTime || 0);
       if (videoB) setTimeB(videoB.currentTime || 0);
 
-      if (warp && videoA) {
+      if (videoA && videoB) {
         const currentTimeA = videoA.currentTime || 0;
-        const mappedTimeB = mapAtoB(warp, currentTimeA);
-        const rawDelta = mappedTimeB - currentTimeA || 0;
-        // Reducing the spikes of the delta making it smoother and easy to read
-        const smoothingFactor = 0.3;
-        const smoothedDelta =
-          deltaSmoothed == null
-            ? rawDelta
-            : smoothingFactor * rawDelta +
-              (1 - smoothingFactor) * deltaSmoothed;
+        const currentTimeB = videoB.currentTime || 0;
 
-        setDeltaSmoothed(smoothedDelta);
-        onDelta?.(smoothedDelta);
-      } else {
-        onDelta?.(0);
-        setDeltaSmoothed(null);
+        // If we have a warp mapping we use it otherwise we use the raw differenbce
+        let rawDelta;
+        if (warp) {
+          const mappedTimeB = mapAtoB(warp, currentTimeA);
+          rawDelta = mappedTimeB - currentTimeA || 0;
+        } else {
+          rawDelta = currentTimeB - currentTimeA || 0;
+        }
+
+        // Smooth for readability
+        const smoothingFactor = 0.3;
+        const prev = prevDeltaRef.current;
+        const smoothed =
+          prev == null
+            ? rawDelta
+            : smoothingFactor * rawDelta + (1 - smoothingFactor) * prev;
+
+        prevDeltaRef.current = smoothed;
+        setDeltaSmoothed(smoothed);
+
+        // Progress along lap A 
+        const durationA = videoA.duration || 0;
+        const progress =
+          durationA > 0 ? clamp(currentTimeA / durationA, 0, 1) : 0;
+
+        // Send smoothed, progress, raw
+        if (onDelta) onDelta(smoothed, progress, rawDelta);
       }
       rafId = requestAnimationFrame(update);
     };
@@ -257,6 +273,9 @@ export default function VideoPreview({ videoA, videoB, onDelta }) {
 
     setWarp(buildWarp(mappingPoints));
     setRefMode(false);
+    if (typeof onAnchors === "function") {
+      onAnchors(mappingPoints);
+    }
   };
 
   return (
