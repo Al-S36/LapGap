@@ -27,6 +27,18 @@ export default function VideoPreview({ videoA, videoB, onDelta }) {
   const [warp, setWarp] = useState(null);
   const [deltaSmoothed, setDeltaSmoothed] = useState(null);
 
+  // Muted states, by defult its muted
+  const [isMutedA, setIsMutedA] = useState(true);
+  const [isMutedB, setIsMutedB] = useState(true);
+
+  // Apply mute state to the video elements whenever it changes
+  useEffect(() => {
+    const videoA = videoARef.current;
+    const videoB = videoBRef.current;
+    if (videoA) videoA.muted = !!isMutedA;
+    if (videoB) videoB.muted = !!isMutedB;
+  }, [isMutedA, isMutedB]);
+
   // Keep track of current playback time for each video
   useEffect(() => {
     let rafId;
@@ -168,134 +180,139 @@ export default function VideoPreview({ videoA, videoB, onDelta }) {
   const frameStep = 1 / fpsB;
   // allows user to go back and forth either by frame or by 0.1s
   const nudgeVideoBTime = (dt) => {
-  const videoB = videoBRef.current;
-  if (!videoB) return;
-  videoB.currentTime = clamp(
-    (videoB.currentTime || 0) + dt,
-    0,
-    videoB?.duration || 0
-  );
-};
+    const videoB = videoBRef.current;
+    if (!videoB) return;
+    videoB.currentTime = clamp(
+      (videoB.currentTime || 0) + dt,
+      0,
+      videoB?.duration || 0
+    );
+  };
 
   // Setting a pair of anchor points
   const setPairAtCurrent = () => {
-  const videoB = videoBRef.current;
-  if (!refMode || !videoB) return;
+    const videoB = videoBRef.current;
+    if (!refMode || !videoB) return;
 
-  const timeB = videoB.currentTime || 0;
-  const timeA = currentTA;
+    const timeB = videoB.currentTime || 0;
+    const timeA = currentTA;
 
-  setPairs((prevPairs) => {
-    const isEndpointLocked =
-      prevPairs.find((pair) => pair.id === currentIdx)?.locked;
+    setPairs((prevPairs) => {
+      const isEndpointLocked = prevPairs.find(
+        (pair) => pair.id === currentIdx
+      )?.locked;
 
-    // Remove any existing pair for this anchor index, then create the new one
-    const pairsWithoutCurrent = prevPairs.filter(
-      (pair) => pair.id !== currentIdx
+      // Remove any existing pair for this anchor index, then create the new one
+      const pairsWithoutCurrent = prevPairs.filter(
+        (pair) => pair.id !== currentIdx
+      );
+
+      return [
+        ...pairsWithoutCurrent,
+        { id: currentIdx, tA: timeA, tB: timeB, locked: !!isEndpointLocked },
+      ].sort((p1, p2) => p1.id - p2.id);
+    });
+  };
+
+  // Remove the pair at the current anchor unless its locked
+  const removeCurrentPair = () => {
+    setPairs((prevPairs) => {
+      const current = prevPairs.find((p) => p.id === currentIdx);
+      if (current?.locked) return prevPairs;
+      return prevPairs.filter((p) => p.id !== currentIdx);
+    });
+  };
+
+  // Build the time-warp mapping from the collected pairs
+  const buildMapping = () => {
+    const totalDurationA = videoA?.duration || 0;
+    const totalDurationB = videoB?.duration || 0;
+
+    // Ensure we have start/end guard pairs
+    const needsStartPair = !pairs.some((p) => p.tA === 0);
+    const needsEndPair = !pairs.some(
+      (p) => Math.abs(p.tA - totalDurationA) < 1e-3
     );
 
-    return [
-      ...pairsWithoutCurrent,
-      { id: currentIdx, tA: timeA, tB: timeB, locked: !!isEndpointLocked },
-    ].sort((p1, p2) => p1.id - p2.id);
-  });
-};
+    // Only use these guards for building the mapping
+    const mergedPairs = [
+      ...(needsStartPair ? [{ id: 0, tA: 0, tB: 0, locked: true }] : []),
+      ...(needsEndPair
+        ? // large id just to sort after everything else
+          [{ id: 999999, tA: totalDurationA, tB: totalDurationB, locked: true }]
+        : []),
+      ...pairs,
+    ];
 
-// Remove the pair at the current anchor unless its locked
-const removeCurrentPair = () => {
-  setPairs((prevPairs) => {
-    const current = prevPairs.find((p) => p.id === currentIdx);
-    if (current?.locked) return prevPairs;
-    return prevPairs.filter((p) => p.id !== currentIdx);
-  });
-};
+    // Sort by Car A time and keep only the (tA, tB)
+    const mappingPoints = mergedPairs
+      .slice()
+      .sort((p1, p2) => p1.tA - p2.tA)
+      .map(({ tA, tB }) => ({ tA, tB }));
 
-// Build the time-warp mapping from the collected pairs
-const buildMapping = () => {
-  const totalDurationA = videoA?.duration || 0;
-  const totalDurationB = videoB?.duration || 0;
+    if (mappingPoints.length < 6) {
+      alert("Add at least 6 matched points (endpoints are auto-added).");
+      return;
+    }
 
-  // Ensure we have start/end guard pairs
-  const needsStartPair = !pairs.some((p) => p.tA === 0);
-  const needsEndPair = !pairs.some(
-    (p) => Math.abs(p.tA - totalDurationA) < 1e-3
-  );
-
-  // Only use these guards for building the mapping
-  const mergedPairs = [
-    ...(needsStartPair
-      ? [{ id: 0, tA: 0, tB: 0, locked: true }]
-      : []),
-    ...(needsEndPair
-      // large id just to sort after everything else
-      ? [{ id: 999999, tA: totalDurationA, tB: totalDurationB, locked: true }]
-      : []),
-    ...pairs,
-  ];
-
-  // Sort by Car A time and keep only the (tA, tB)
-  const mappingPoints = mergedPairs
-    .slice()
-    .sort((p1, p2) => p1.tA - p2.tA)
-    .map(({ tA, tB }) => ({ tA, tB }));
-
-  if (mappingPoints.length < 6) {
-    alert("Add at least 6 matched points (endpoints are auto-added).");
-    return;
-  }
-
-  setWarp(buildWarp(mappingPoints));
-  setRefMode(false);
-};
+    setWarp(buildWarp(mappingPoints));
+    setRefMode(false);
+  };
 
   return (
     <div className="preview-container">
       {!overlayMode ? (
-      <div className="players responsive-grid-2">
-        {/* Car A */}
-        <div className="player">
-          {videoA?.url ? (
-            <>
-              <video
-                ref={videoARef}
-                src={videoA.url}
-                playsInline
-                preload="auto"
-              />
-              <div className="hud">
-                <div className="tag">Car A</div>
-                <div className="time">
-                  {timeFormatter(timeA)} / {timeFormatter(videoA.duration || 0)}
+        <div className="players responsive-grid-2">
+          {/* Car A */}
+          <div className="player">
+            {videoA?.url ? (
+              <>
+                <video
+                  ref={videoARef}
+                  src={videoA.url}
+                  playsInline
+                  preload="auto"
+                  muted={isMutedA}
+                  defaultMuted={isMutedA}
+                />
+                <div className="hud">
+                  <div className="tag">Car A</div>
+                  <div className="time">
+                    {timeFormatter(timeA)} /{" "}
+                    {timeFormatter(videoA.duration || 0)}
+                  </div>
                 </div>
-              </div>
-            </>
-          ) : (
-            <div className="video-placeholder">Upload Car A to preview</div>
-          )}
-        </div>
+              </>
+            ) : (
+              <div className="video-placeholder">Upload Car A to preview</div>
+            )}
+          </div>
 
-        {/* Car B */}
-        <div className="player">
-          {videoB?.url ? (
-            <>
-              <video
-                ref={videoBRef}
-                src={videoB.url}
-                playsInline
-                preload="auto"
-              />
-              <div className="hud">
-                <div className="tag">Car B</div>
-                <div className="time">
-                  {timeFormatter(timeB)} / {timeFormatter(videoB.duration || 0)}
+          {/* Car B */}
+          <div className="player">
+            {videoB?.url ? (
+              <>
+                <video
+                  ref={videoBRef}
+                  src={videoB.url}
+                  playsInline
+                  preload="auto"
+                  muted={isMutedB}
+                  defaultMuted={isMutedB}
+                />
+                <div className="hud">
+                  <div className="tag">Car B</div>
+                  <div className="time">
+                    {timeFormatter(timeB)} /{" "}
+                    {timeFormatter(videoB.duration || 0)}
+                  </div>
                 </div>
-              </div>
-            </>
-          ) : (
-            <div className="video-placeholder">Upload Car B to preview</div>
-          )}
+              </>
+            ) : (
+              <div className="video-placeholder">Upload Car B to preview</div>
+            )}
+          </div>
         </div>
-      </div>
       ) : (
         /* Overlay layout */
         <div className="player overlay-stack">
@@ -307,6 +324,8 @@ const buildMapping = () => {
                 src={(overlayTop === "A" ? videoB?.url : videoA?.url) || ""}
                 playsInline
                 preload="auto"
+                muted={overlayTop === "A" ? isMutedB : isMutedA}
+                defaultMuted={overlayTop === "A" ? isMutedB : isMutedA}
               />
 
               {/* Top layer */}
@@ -317,6 +336,8 @@ const buildMapping = () => {
                 preload="auto"
                 className="overlay-top"
                 style={{ "--overlay-alpha": overlayAlpha }}
+                muted={overlayTop === "A" ? isMutedA : isMutedB}
+                defaultMuted={overlayTop === "A" ? isMutedA : isMutedB}
               />
 
               {/* Overlay HUD slider */}
@@ -369,38 +390,62 @@ const buildMapping = () => {
       )}
 
       {/* Controls */}
-      <div className="controls">
-        <button className="btn" onClick={onPlay} disabled={!videoA || !videoB}>
-          Play
-        </button>
-        <button className="btn" onClick={onPause}>
-          Pause
-        </button>
-        <button className="btn" onClick={onReset}>
-          Reset
-        </button>
+      <div className="controls controls-split">
+        <div className="cluster left">
+          <button className="btn" onClick={() => setIsMutedA((v) => !v)}>
+            {isMutedA ? "Unmute A" : "Mute A"}
+          </button>
+        </div>
 
-        <button
-          className={`btn ${overlayMode ? "active" : ""}`}
-          onClick={() => setOverlayMode((v) => !v)}
-        >
-          {overlayMode ? "Overlay: ON" : "Overlay: OFF"}
-        </button>
-        <button
-          className="btn"
-          onClick={() => setOverlayTop((t) => (t === "A" ? "B" : "A"))}
-          disabled={!overlayMode}
-        >
-          Swap Top ({overlayTop})
-        </button>
+        <div className="cluster center">
+          <button
+            className="btn"
+            onClick={onPlay}
+            disabled={!videoA || !videoB}
+          >
+            Play
+          </button>
+          <button className="btn" onClick={onPause}>
+            Pause
+          </button>
+          <button className="btn" onClick={onReset}>
+            Reset
+          </button>
+        </div>
 
-        <button
-          className="btn"
-          onClick={startReferenceMode}
-          disabled={!canStartRef}
-        >
-          Start Reference Mode
-        </button>
+        <div className="cluster right">
+          <button className="btn" onClick={() => setIsMutedB((v) => !v)}>
+            {isMutedB ? "Unmute B" : "Mute B"}
+          </button>
+        </div>
+      </div>
+
+      <div className="controls controls-sub">
+        <div className="cluster center">
+          <button
+            className={`btn ${overlayMode ? "active" : ""}`}
+            onClick={() => setOverlayMode((v) => !v)}
+          >
+            {overlayMode ? "Overlay: ON" : "Overlay: OFF"}
+          </button>
+
+          <button
+            className="btn"
+            onClick={startReferenceMode}
+            disabled={!canStartRef}
+          >
+            Start Reference Mode
+          </button>
+
+          <button
+            className="btn"
+            onClick={() => setOverlayTop((t) => (t === "A" ? "B" : "A"))}
+            disabled={!overlayMode}
+          >
+            Swap Top ({overlayTop})
+          </button>
+        </div>
+
         {refMode && (
           <button className="btn" onClick={stopReferenceMode}>
             Cancel

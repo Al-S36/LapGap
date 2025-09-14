@@ -14,6 +14,10 @@ If you are developing a production application, we recommend using TypeScript wi
 
 # Change log
 
+## [0.2.2] - 2025-09-13
+- Feature: Added mute/unmute button for each video, set mute by default
+- UI: Changed the interface and made buttons in groups not just one after the other
+
 ## [0.2.1] - 2025-09-13
 - Feature: Added delta bar
 - UX: users can easily know if they are faster or slower while watching the video without looking at the delta number itslef
