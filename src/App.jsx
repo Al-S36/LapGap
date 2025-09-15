@@ -28,6 +28,9 @@ export default function App() {
   const deltaBucketsRef = useRef(new Array(101).fill(null));
   const [anchorPairs, setAnchorPairs] = useState(null);
 
+  const [globalTime, setGlobalTime] = useState(0);
+  const [isScrubbing, setIsScrubbing] = useState(false);
+
   const sessionKey = `${videoA?.url ?? ""}|${videoB?.url ?? ""}`;
 
   // Reset buckets whenever either video changes
@@ -35,6 +38,8 @@ export default function App() {
     deltaBucketsRef.current = new Array(101).fill(null);
     setDeltaSamples([]);
     setAnchorPairs(null);
+    setGlobalTime(0);
+    setIsScrubbing(false);
   }, [videoA?.url, videoB?.url]);
 
   // Recording the new data sample at the given lap
@@ -57,6 +62,25 @@ export default function App() {
     // Update state so that StatsStrip and others can use the new samples
     setDeltaSamples(samples);
   };
+
+  // Durations for stats (and helpful elsewhere)
+  const durationA = videoA?.duration ?? 0;
+  const durationB = videoB?.duration ?? 0;
+
+  // Follow playback only when no scrubbing so to not fight the user
+  const handleTimes = ({ timeA, timeB }) => {
+    if (isScrubbing) return;
+    setGlobalTime((prev) => {
+      const t = Math.max(timeA || 0, timeB || 0);
+      return Math.abs(t - prev) > 1e-3 ? t : prev;
+    });
+  };
+
+  const handleSeek = (t) => setGlobalTime(t);
+
+  // Scrub lifecycle
+  const handleScrubStart = () => setIsScrubbing(true);
+  const handleScrubEnd = () => setIsScrubbing(false);
 
   return (
     <div className="home-page">
@@ -93,6 +117,12 @@ export default function App() {
               recordDeltaSample(progress, raw ?? smoothed);
             }}
             onAnchors={setAnchorPairs}
+            onTimes={handleTimes}
+            seekTo={isScrubbing ? globalTime : undefined}
+            globalTime={globalTime}
+            onSeek={handleSeek}
+            onScrubStart={handleScrubStart}
+            onScrubEnd={handleScrubEnd}
           />
         </section>
 

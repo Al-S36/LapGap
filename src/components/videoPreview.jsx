@@ -2,10 +2,22 @@ import { useEffect, useRef, useState } from "react";
 import { timeFormatter } from "./services/timeFormatter";
 import { playBoth, pauseBoth, resetBoth } from "./services/videoSync";
 import { clamp, buildWarp, mapAtoB } from "./services/mapping";
+import TimeScrubber from "./timeScrubber.jsx";
 
 // Shows two side-by-side video players (Car A and Car B),
 // tracks their playback progress, and provides simple playback controls.
-export default function VideoPreview({ videoA, videoB, onDelta, onAnchors }) {
+export default function VideoPreview({
+  videoA,
+  videoB,
+  onDelta,
+  onAnchors,
+  onTimes,
+  seekTo,
+  globalTime = 0,
+  onSeek,
+  onScrubStart,
+  onScrubEnd,
+}) {
   // References to each video element
   const videoARef = useRef(null);
   const videoBRef = useRef(null);
@@ -55,6 +67,11 @@ export default function VideoPreview({ videoA, videoB, onDelta, onAnchors }) {
         const currentTimeA = videoA.currentTime || 0;
         const currentTimeB = videoB.currentTime || 0;
 
+        // Publish live times upward so it can update global thumb when not scrubbing
+        if (typeof onTimes === "function") {
+          onTimes({ timeA: currentTimeA, timeB: currentTimeB });
+        }
+
         // If we have a warp mapping we use it otherwise we use the raw differenbce
         let rawDelta;
         if (warp) {
@@ -87,7 +104,22 @@ export default function VideoPreview({ videoA, videoB, onDelta, onAnchors }) {
     };
     rafId = requestAnimationFrame(update);
     return () => cancelAnimationFrame(rafId);
-  }, [warp, onDelta]);
+  }, [warp, onDelta, onTimes]);
+
+
+  useEffect(() => {
+    if (!Number.isFinite(seekTo)) return;
+    const videoA = videoARef.current;
+    const videoB = videoBRef.current;
+    if (videoA) {
+      const dA = Number(videoA.duration) || 0;
+      videoA.currentTime = clamp(seekTo, 0, Math.max(0, dA - 0.001));
+    }
+    if (videoB) {
+      const dB = Number(videoB.duration) || 0;
+      videoB.currentTime = clamp(seekTo, 0, Math.max(0, dB - 0.001));
+    }
+  }, [seekTo]);
 
   // The play back controls
   const onPlay = () => playBoth(videoARef.current, videoBRef.current);
@@ -278,6 +310,9 @@ export default function VideoPreview({ videoA, videoB, onDelta, onAnchors }) {
     }
   };
 
+  const durationA = videoA?.duration ?? 0;
+  const durationB = videoB?.duration ?? 0;
+
   return (
     <div className="preview-container">
       {!overlayMode ? (
@@ -407,6 +442,18 @@ export default function VideoPreview({ videoA, videoB, onDelta, onAnchors }) {
           )}
         </div>
       )}
+
+      {/* Scrubber */}
+      <div style={{ marginTop: 12 }}>
+        <TimeScrubber
+          durationA={durationA}
+          durationB={durationB}
+          value={globalTime}
+          onSeek={onSeek}
+          onSeekStart={onScrubStart}
+          onSeekEnd={onScrubEnd}
+        />
+      </div>
 
       {/* Controls */}
       <div className="controls controls-split">

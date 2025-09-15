@@ -14,10 +14,13 @@ If you are developing a production application, we recommend using TypeScript wi
 
 # Change log
 
-## [0.2.3] - 2025-09-13
+## [0.2.4] - 2025-09-14
+- Feature: Added video scrubber so user can go back and forth through the video with easily
+
+## [0.2.3] - 2025-09-14
 - Feature: Added theoretical best lap, theortical time gained, consistency, lead % all to help the user improve their laps
 
-## [0.2.2] - 2025-09-13
+## [0.2.2] - 2025-09-14
 - Feature: Added mute/unmute button for each video, set mute by default
 - UI: Changed the interface and made buttons in groups not just one after the other
 
