@@ -17,6 +17,7 @@ export default function StatsStrip({
   deltaSamples = [],
   anchorPairs = null,
   sessionKey,
+  trackLengthKm = null,
 }) {
   
   // Calculates the final gap between two laps
@@ -73,6 +74,12 @@ export default function StatsStrip({
 
   const formatSeconds = (s) => `${(Number.isFinite(s) ? s : 0).toFixed(3)}s`;
 
+  // Average speed (km/h) for A and B
+  const avgSpeed = (lapTime) => {
+    if (!trackLengthKm || !lapTime || lapTime <= 0) return null;
+    return (trackLengthKm / (lapTime / 3600)).toFixed(1); // km/h
+  };
+
   return (
     <div className="stats-container">
       <div className="stat">
@@ -95,15 +102,23 @@ export default function StatsStrip({
           {gapFormatter(finalGap)} seconds
         </div>
       </div>
+
+      {/* Theoretical best and saving */}
       <div className="stat">
         <div className="stat-label">Theoretical Best Lap</div>
-        <div className="stat-value">{timeFormatter(theoreticalBest)}</div>
+        <div className="stat-value">
+          {timeFormatter(theoreticalBest)}{" "}
+          <span className="stat-suffix success">
+            -{formatSeconds(hasAnchors ? theoreticalSaving : savingDisplay)}
+          </span>
+        </div>
       </div>
 
+      {/* Average Speeds card */}
       <div className="stat">
-        <div className="stat-label">Theoretical Time Saving</div>
+        <div className="stat-label">Average Speed</div>
         <div className="stat-value">
-          {formatSeconds(hasAnchors ? theoreticalSaving : savingDisplay)}
+          A: {avgSpeed(lapTimeA) ? `${avgSpeed(lapTimeA)} km/h` : "--"} | B: {avgSpeed(lapTimeB) ? `${avgSpeed(lapTimeB)} km/h` : "--"}
         </div>
       </div>
 

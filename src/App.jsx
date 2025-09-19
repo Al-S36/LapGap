@@ -5,6 +5,7 @@ import VideoPreview from "./components/videoPreview.jsx";
 import StatsStrip from "./components/statsStrip.jsx";
 import Footer from "./components/Footer.jsx";
 import DeltaCard from "./components/deltaCard.jsx";
+import TrackSettings from "./components/TrackSettings.jsx";
 
 // styling
 import "./styling/base.css";
@@ -32,6 +33,15 @@ export default function App() {
   const [isScrubbing, setIsScrubbing] = useState(false);
 
   const sessionKey = `${videoA?.url ?? ""}|${videoB?.url ?? ""}`;
+
+  const [track, setTrack] = useState({ name: "", lengthKm: null });
+
+  // Updating the track name and length
+  useEffect(() => {
+    const handler = (e) => setTrack(e.detail);
+    window.addEventListener("trackSettings:update", handler);
+    return () => window.removeEventListener("trackSettings:update", handler);
+  }, []);
 
   // Reset buckets whenever either video changes
   useEffect(() => {
@@ -87,6 +97,12 @@ export default function App() {
       <Header />
 
       <main className="container">
+        {/* Track Settings */}
+        <section className="card">
+          <TrackSettings />
+        </section>
+
+        {/* Uploaders */}
         <section className="card responsive-grid-2">
           <UploadArea
             label="Car A"
@@ -104,10 +120,12 @@ export default function App() {
           />
         </section>
 
+        {/* Live Delta summary */}
         <section className="card">
           <DeltaCard totalDelta={liveDelta} />
         </section>
 
+        {/* Dual player */}
         <section className="card">
           <VideoPreview
             videoA={videoA}
@@ -126,6 +144,7 @@ export default function App() {
           />
         </section>
 
+        {/* Stats */}
         <section className="card">
           <StatsStrip
             lapTimeA={videoA?.duration ?? 0}
@@ -134,6 +153,7 @@ export default function App() {
             deltaSamples={deltaSamples}
             sessionKey={sessionKey}
             anchorPairs={anchorPairs}
+            trackLengthKm={track.lengthKm}
           />
         </section>
       </main>
