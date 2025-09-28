@@ -19,7 +19,6 @@ export default function StatsStrip({
   sessionKey,
   trackLengthKm = null,
 }) {
-  
   // Calculates the final gap between two laps
   const finalGap = (lapTimeB || 0) - (lapTimeA || 0);
 
@@ -71,7 +70,6 @@ export default function StatsStrip({
       setSavingDisplay(theoreticalSaving);
     }
   }, [theoreticalSaving, hasAnchors]);
-
   const formatSeconds = (s) => `${(Number.isFinite(s) ? s : 0).toFixed(3)}s`;
 
   // Average speed (km/h) for A and B
@@ -118,7 +116,8 @@ export default function StatsStrip({
       <div className="stat">
         <div className="stat-label">Average Speed</div>
         <div className="stat-value">
-          A: {avgSpeed(lapTimeA) ? `${avgSpeed(lapTimeA)} km/h` : "--"} | B: {avgSpeed(lapTimeB) ? `${avgSpeed(lapTimeB)} km/h` : "--"}
+          A: {avgSpeed(lapTimeA) ? `${avgSpeed(lapTimeA)} km/h` : "--"} | B:{" "}
+          {avgSpeed(lapTimeB) ? `${avgSpeed(lapTimeB)} km/h` : "--"}
         </div>
       </div>
 

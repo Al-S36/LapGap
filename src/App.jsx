@@ -3,9 +3,10 @@ import Header from "./components/Header.jsx";
 import UploadArea from "./components/UploadArea.jsx";
 import VideoPreview from "./components/videoPreview.jsx";
 import StatsStrip from "./components/statsStrip.jsx";
-import Footer from "./components/Footer.jsx";
+import Footer from "./components/footer.jsx";
 import DeltaCard from "./components/deltaCard.jsx";
 import TrackSettings from "./components/TrackSettings.jsx";
+import generateReport from "./components/services/generateReport.js";
 
 // styling
 import "./styling/base.css";
@@ -36,7 +37,12 @@ export default function App() {
 
   const [track, setTrack] = useState({ name: "", lengthKm: null });
 
-  // Updating the track name and length
+  // Stats lifted from StatsStrip for the PDF
+  const [theoreticalBest, setTheoreticalBest] = useState(null);
+  const [consistencyPct, setConsistencyPct] = useState(null);
+  const [leadSharePctA, setLeadSharePctA] = useState(null);
+
+  // Track (and cars) from TrackSettings
   useEffect(() => {
     const handler = (e) => setTrack(e.detail);
     window.addEventListener("trackSettings:update", handler);
@@ -52,7 +58,7 @@ export default function App() {
     setIsScrubbing(false);
   }, [videoA?.url, videoB?.url]);
 
-  // Recording the new data sample at the given lap
+  // Record a delta sample at a given lap progress
   const recordDeltaSample = (lapProgress, rawDelta) => {
     // Ensure that if progress is null or infinity to becomes 0
     const safeProgress = Number.isFinite(lapProgress)
@@ -73,11 +79,11 @@ export default function App() {
     setDeltaSamples(samples);
   };
 
-  // Durations for stats (and helpful elsewhere)
+  // Durations (used in StatsStrip props too)
   const durationA = videoA?.duration ?? 0;
   const durationB = videoB?.duration ?? 0;
 
-  // Follow playback only when no scrubbing so to not fight the user
+  // Keep global time in sync during playback (unless scrubbing)
   const handleTimes = ({ timeA, timeB }) => {
     if (isScrubbing) return;
     setGlobalTime((prev) => {
@@ -92,9 +98,29 @@ export default function App() {
   const handleScrubStart = () => setIsScrubbing(true);
   const handleScrubEnd = () => setIsScrubbing(false);
 
+  // Enable header button only when both laps are present
+  const canGenerateReport = Boolean(videoA && videoB);
+
   return (
     <div className="home-page">
-      <Header />
+      <Header
+        onGenerateReport={() =>
+          generateReport({
+            track,
+            videoA,
+            videoB,
+            liveDelta, // OK to keep; ignored in table now
+            theoreticalBest,
+            consistencyPct,
+            leadSharePctA: Number.isFinite(leadSharePctA)
+              ? Math.round(leadSharePctA)
+              : null,
+            deltaSamples, // ← REQUIRED for charts without anchors (and kept as backup)
+            anchorPairs: anchorPairs?.pairs ?? anchorPairs, // ← REQUIRED for Segment Table / Cumulative Curve / Anchor Map
+          })
+        }
+        canGenerate={canGenerateReport}
+      />
 
       <main className="container">
         {/* Track Settings */}
@@ -147,13 +173,26 @@ export default function App() {
         {/* Stats */}
         <section className="card">
           <StatsStrip
-            lapTimeA={videoA?.duration ?? 0}
-            lapTimeB={videoB?.duration ?? 0}
+            lapTimeA={durationA}
+            lapTimeB={durationB}
             liveDelta={liveDelta}
             deltaSamples={deltaSamples}
             sessionKey={sessionKey}
             anchorPairs={anchorPairs}
             trackLengthKm={track.lengthKm}
+            // Lift values so PDF matches the UI
+            onSummary={(s) => {
+              if (!s) return;
+              setTheoreticalBest(
+                Number.isFinite(s.theoreticalBest) ? s.theoreticalBest : null
+              );
+              setConsistencyPct(
+                Number.isFinite(s.consistencyPct) ? s.consistencyPct : null
+              );
+              setLeadSharePctA(
+                Number.isFinite(s.leadSharePctA) ? s.leadSharePctA : null
+              );
+            }}
           />
         </section>
       </main>
