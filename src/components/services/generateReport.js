@@ -82,14 +82,35 @@ export default async function generateReport({
       ? lapA
       : lapB;
   const finalGapCalc = isNum(lapA) && isNum(lapB) ? lapB - lapA : null;
-  const theoreticalSave =
-    isNum(theoreticalBest) && isNum(bestLap) ? bestLap - theoreticalBest : null;
+  const theoreticalBestKPI = isNum(theoreticalBest)
+    ? theoreticalBest
+    : computeTheoreticalBestLapPreferred(
+        lapA,
+        lapB,
+        deltaSamples,
+        60,
+        anchorPairs
+      );
+
+  const theoreticalSaveVal = isNum(theoreticalSaving)
+    ? theoreticalSaving
+    : isNum(theoreticalBestKPI) && isNum(bestLap)
+    ? Math.max(0, bestLap - theoreticalBestKPI)
+    : null;
+
+  const consistencyValKPI = isNum(consistencyPct)
+    ? consistencyPct
+    : computeConsistencyScore(deltaSamples);
+
+  const leadShareAValKPI = isNum(leadSharePctA)
+    ? leadSharePctA
+    : computeLeadPercentA(deltaSamples);
 
   yPos = kpi(doc, yPos, [
     `Best Lap: ${time(bestLap)}`,
     `Final Gap (B - A): ${sgn(finalGapCalc)}`,
     `Theoretical Save: ${
-      isNum(theoreticalSave) ? sgn(-theoreticalSave) : "N/A"
+      isNum(theoreticalSaveVal) ? sgn(-theoreticalSaveVal) : "N/A"
     }`,
   ]);
 
@@ -99,12 +120,12 @@ export default async function generateReport({
     body: [
       [
         {
-          content: `Consistency: ${pct(consistencyPct, 1)}`,
+          content: `Consistency: ${pct(consistencyValKPI, 1)}`,
           styles: { fillColor: [250, 250, 250] },
         },
         {
           content: `Lead Share (A): ${
-            isNum(leadSharePctA) ? `${leadSharePctA.toFixed(1)}%` : "N/A"
+            isNum(leadShareAValKPI) ? `${leadShareAValKPI.toFixed(1)}%` : "N/A"
           }`,
           styles: { fillColor: [250, 250, 250] },
         },

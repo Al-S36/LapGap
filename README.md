@@ -14,6 +14,9 @@ If you are developing a production application, we recommend using TypeScript wi
 
 # Change log
 
+## [0.2.7] - 2025-09-28
+- Bug: fixed summary section as sometimes the Theoretical save, Consistency, and Lead share come as N/A
+
 ## [0.2.6] - 2025-09-28
 - Feature: Added quick report feature
 
