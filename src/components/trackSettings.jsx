@@ -25,7 +25,7 @@ const toNumOrNull = (input) => {
 const powerToWeight = (hp, kg) => {
   if (!Number.isFinite(hp) || !Number.isFinite(kg) || hp <= 0 || kg <= 0)
     return null;
-  return +((hp / (kg / 1000))).toFixed(1);
+  return +(hp / kg).toFixed(3);
 };
 
 export default function TrackSettings() {
@@ -65,7 +65,7 @@ export default function TrackSettings() {
       carModel,
       carWeightKg,
       carPowerHp,
-      powerToWeightHpPerTon: ptw != null ? ptw : "N/A",
+      powerToWeightWhpPerKg: ptw != null ? ptw : "N/A",
     };
   };
 
@@ -140,35 +140,32 @@ export default function TrackSettings() {
   };
 
   const handleCarNumericBlur = (which, key, val) => {
-  // Heaviest production car Mercedes Pullman Guard
-  const maxWeight = 5100;
-  // Most powerful production car Devel Sixteen 12.3L v16 quad turbo
-  const maxPower  = 5007;
+    // Heaviest production car Mercedes Pullman Guard
+    const maxWeight = 5100;
+    // Most powerful production car Devel Sixteen 12.3L v16 quad turbo
+    const maxPower = 5007;
 
-  let inputValue = (val || "").trim();
-  if (inputValue.startsWith(".")) inputValue = "0" + inputValue;
-  if (inputValue.endsWith(".")) inputValue = inputValue.slice(0, -1);
+    let inputValue = (val || "").trim();
+    if (inputValue.startsWith(".")) inputValue = "0" + inputValue;
+    if (inputValue.endsWith(".")) inputValue = inputValue.slice(0, -1);
 
-  const numericValue = Number(inputValue);
+    const numericValue = Number(inputValue);
 
-  // Choose ceiling based on field: weight or power
-  const limit = key === "carPowerHp" ? maxPower : maxWeight;
+    // Choose ceiling based on field: weight or power
+    const limit = key === "carPowerHp" ? maxPower : maxWeight;
 
-  const valid =
-    numericValue > 0 &&
-    Number.isFinite(numericValue) &&
-    numericValue < limit;
+    const valid =
+      numericValue > 0 && Number.isFinite(numericValue) && numericValue < limit;
 
-  const formatted = valid ? numericValue.toFixed(2) : "";
+    const formatted = valid ? numericValue.toFixed(2) : "";
 
-  if (which === "A") {
-    setCarA({ ...carA, [key]: formatted });
-  } else {
-    setCarB({ ...carB, [key]: formatted });
-  }
-  emitTrackSettings(form.name, form.lengthKm, carsPayload);
-};
-
+    if (which === "A") {
+      setCarA({ ...carA, [key]: formatted });
+    } else {
+      setCarB({ ...carB, [key]: formatted });
+    }
+    emitTrackSettings(form.name, form.lengthKm, carsPayload);
+  };
 
   return (
     <section>
@@ -231,9 +228,7 @@ export default function TrackSettings() {
               type="text"
               placeholder="Driver name"
               value={carA.driverName}
-              onChange={(e) =>
-                setCarA({ ...carA, driverName: e.target.value })
-              }
+              onChange={(e) => setCarA({ ...carA, driverName: e.target.value })}
               autoComplete="off"
             />
           </div>
@@ -247,9 +242,7 @@ export default function TrackSettings() {
               type="text"
               placeholder="Car model"
               value={carA.carModel}
-              onChange={(e) =>
-                setCarA({ ...carA, carModel: e.target.value })
-              }
+              onChange={(e) => setCarA({ ...carA, carModel: e.target.value })}
               autoComplete="off"
             />
           </div>
@@ -306,9 +299,7 @@ export default function TrackSettings() {
               type="text"
               placeholder="Driver name"
               value={carB.driverName}
-              onChange={(e) =>
-                setCarB({ ...carB, driverName: e.target.value })
-              }
+              onChange={(e) => setCarB({ ...carB, driverName: e.target.value })}
               autoComplete="off"
             />
           </div>
@@ -322,9 +313,7 @@ export default function TrackSettings() {
               type="text"
               placeholder="Car model"
               value={carB.carModel}
-              onChange={(e) =>
-                setCarB({ ...carB, carModel: e.target.value })
-              }
+              onChange={(e) => setCarB({ ...carB, carModel: e.target.value })}
               autoComplete="off"
             />
           </div>
