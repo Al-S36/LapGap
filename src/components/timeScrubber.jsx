@@ -75,7 +75,7 @@ export default function TimeScrubber({
 
         {/* Markers overlay */}
         <div className="timeline-markers" aria-hidden>
-          {normAnchors.map((t, i) => {
+          {clampedAnchorTimes.map((t, i) => {
             const pct = (t / (maxDuration || 1)) * 100;
             const isActive = i === nearestAnchorIndex;
             return (

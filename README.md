@@ -14,6 +14,10 @@ If you are developing a production application, we recommend using TypeScript wi
 
 # Change log
 
+## [0.2.8] - 2025-09-29
+- Feature: added markers to the timeline
+- Bug: fixed variable name in the tiemscrubber
+
 ## [0.2.7] - 2025-09-28
 - Bug: fixed summary section as sometimes the Theoretical save, Consistency, and Lead share come as N/A
 

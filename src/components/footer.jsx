@@ -3,7 +3,7 @@ export default function Footer() {
     <footer className="footer">
       <div className="container footer-content">
         <small>LapGap — Ahmad Shahin • All client-side • React + Vite</small>
-        <small className="muted">v0.2.7</small>
+        <small className="muted">v0.2.8</small>
       </div>
     </footer>
   );
