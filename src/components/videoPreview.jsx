@@ -92,7 +92,7 @@ export default function VideoPreview({
         prevDeltaRef.current = smoothed;
         setDeltaSmoothed(smoothed);
 
-        // Progress along lap A 
+        // Progress along lap A
         const durationA = videoA.duration || 0;
         const progress =
           durationA > 0 ? clamp(currentTimeA / durationA, 0, 1) : 0;
@@ -105,7 +105,6 @@ export default function VideoPreview({
     rafId = requestAnimationFrame(update);
     return () => cancelAnimationFrame(rafId);
   }, [warp, onDelta, onTimes]);
-
 
   useEffect(() => {
     if (!Number.isFinite(seekTo)) return;
@@ -313,6 +312,13 @@ export default function VideoPreview({
   const durationA = videoA?.duration ?? 0;
   const durationB = videoB?.duration ?? 0;
 
+  // anchors used here to make markers on the video timeline
+  const timelineAnchors = refMode
+    ? sampleTimesA || []
+    : (pairs || []).map((p) => p.tA).filter((t) => Number.isFinite(t));
+
+  const highlightAnchorAt = refMode ? currentTA : null;
+
   return (
     <div className="preview-container">
       {!overlayMode ? (
@@ -452,6 +458,8 @@ export default function VideoPreview({
           onSeek={onSeek}
           onSeekStart={onScrubStart}
           onSeekEnd={onScrubEnd}
+          anchors={timelineAnchors}
+          highlightAt={highlightAnchorAt}
         />
       </div>
 

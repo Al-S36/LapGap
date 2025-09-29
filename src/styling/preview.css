@@ -202,3 +202,37 @@
   cursor: pointer;
   border: none;
 }
+
+
+/* --- Timeline markers --- */
+.timeline-track {
+  position: relative;
+}
+
+.timeline-range {
+  position: relative;
+  z-index: 1;
+}
+
+.timeline-markers {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  pointer-events: none;
+}
+
+.timeline-marker {
+  position: absolute;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: 2px;
+  height: 10px;
+  background: rgba(255, 255, 255, 0.45);
+  border-radius: 1px;
+}
+
+.timeline-marker.active {
+  height: 14px;
+  background: #06a6e0;
+  box-shadow: 0 0 0 2px rgba(6, 166, 224, 0.2);
+}
