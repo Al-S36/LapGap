@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import Header from "./components/Header.jsx";
+import Header from "./components/header.jsx";
 import UploadArea from "./components/UploadArea.jsx";
 import VideoPreview from "./components/videoPreview.jsx";
 import StatsStrip from "./components/statsStrip.jsx";
@@ -7,6 +7,11 @@ import Footer from "./components/footer.jsx";
 import DeltaCard from "./components/deltaCard.jsx";
 import TrackSettings from "./components/TrackSettings.jsx";
 import generateReport from "./components/services/generateReport.js";
+import {
+  createLapPack,
+  buildDefaultPackFilename,
+} from "./components/services/export/pack.js";
+import { downloadBlob } from "./components/services/export/donwload.js";
 
 // styling
 import "./styling/base.css";
@@ -98,8 +103,33 @@ export default function App() {
   const handleScrubStart = () => setIsScrubbing(true);
   const handleScrubEnd = () => setIsScrubbing(false);
 
-  // Enable header button only when both laps are present
+  // Header buttons enablement
   const canGenerateReport = Boolean(videoA && videoB);
+  const canExportPack = Boolean(videoA?.file && videoB?.file);
+
+  // Export Pack (.zip) handler
+  const onExportPack = async () => {
+    // quick guard so we fail fast with a friendly message
+    if (!videoA?.file || !videoB?.file) {
+      alert("Upload both videos to export.");
+      return;
+    }
+
+    try {
+      const blob = await createLapPack({
+        track,
+        videoA,
+        videoB,
+        anchors: anchorPairs?.pairs ?? anchorPairs,
+      });
+
+      const filename = buildDefaultPackFilename(track?.name || "track");
+      downloadBlob(blob, filename);
+    } catch (err) {
+      console.error("Export failed:", err);
+      alert("Export failed. See console for details.");
+    }
+  };
 
   return (
     <div className="home-page">
@@ -109,17 +139,19 @@ export default function App() {
             track,
             videoA,
             videoB,
-            liveDelta, // OK to keep; ignored in table now
+            liveDelta,
             theoreticalBest,
             consistencyPct,
             leadSharePctA: Number.isFinite(leadSharePctA)
               ? Math.round(leadSharePctA)
               : null,
-            deltaSamples, // ← REQUIRED for charts without anchors (and kept as backup)
-            anchorPairs: anchorPairs?.pairs ?? anchorPairs, // ← REQUIRED for Segment Table / Cumulative Curve / Anchor Map
+            deltaSamples,
+            anchorPairs: anchorPairs?.pairs ?? anchorPairs,
           })
         }
         canGenerate={canGenerateReport}
+        onExportPack={onExportPack}
+        canExportPack={canExportPack}
       />
 
       <main className="container">

@@ -1,10 +1,21 @@
 import lapgapLogo from "../assets/lapGap-logo.png";
 
-export default function Header({ onGenerateReport, canGenerate }) {
+export default function Header({
+  onGenerateReport,
+  canGenerate,
+  onExportPack,
+  canExportPack,
+}) {
   const handleClick = (e) => {
     e.preventDefault();
     if (!canGenerate) return;
     onGenerateReport?.();
+  };
+
+  const handleExportClick = (e) => {
+    e.preventDefault();
+    if (!canExportPack) return;
+    onExportPack?.();
   };
 
   return (
@@ -19,6 +30,7 @@ export default function Header({ onGenerateReport, canGenerate }) {
           <a href="#" className="nav-link active">
             Home
           </a>
+
           {/* Quick Report acts as the generate+download button */}
           <button
             className="nav-link"
@@ -31,6 +43,19 @@ export default function Header({ onGenerateReport, canGenerate }) {
             }
           >
             Quick Report
+          </button>
+
+          <button
+            className="nav-link"
+            onClick={handleExportClick}
+            disabled={!canExportPack}
+            title={
+              !canExportPack
+                ? "Upload both laps to enable export"
+                : "Download Lap Pack (.zip)"
+            }
+          >
+            Export Pack
           </button>
         </nav>
       </div>
