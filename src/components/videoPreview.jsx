@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, useMemo } from "react";
 import { timeFormatter } from "./services/timeFormatter";
 import { playBoth, pauseBoth, resetBoth } from "./services/videoSync";
 import { clamp, buildWarp, mapAtoB } from "./services/mapping";
@@ -9,6 +9,7 @@ import TimeScrubber from "./timeScrubber.jsx";
 export default function VideoPreview({
   videoA,
   videoB,
+  anchors,
   onDelta,
   onAnchors,
   onTimes,
@@ -28,7 +29,7 @@ export default function VideoPreview({
 
   // overlay
   const [overlayMode, setOverlayMode] = useState(false);
-  const [overlayTop, setOverlayTop] = useState("B"); // "A" | "B"
+  const [overlayTop, setOverlayTop] = useState("B");
   const [overlayAlpha, setOverlayAlpha] = useState(0.5);
 
   // reference mode
@@ -54,6 +55,40 @@ export default function VideoPreview({
   const prevDeltaRef = useRef(null);
 
   // Keep track of current playback time for each video
+  const externalPairs = useMemo(() => {
+    if (!anchors) return null;
+    // support [{tA,tB}] or seconds[] (assume 1:1)
+    if (Array.isArray(anchors)) {
+      if (anchors.length === 0) return [];
+      if (typeof anchors[0] === "number") {
+        return anchors.map((t, i) => ({
+          id: i,
+          tA: Number(t) || 0,
+          tB: Number(t) || 0,
+          locked: i === 0 || i === anchors.length - 1,
+        }));
+      }
+      return anchors
+        .map((p, i) => ({
+          id: i,
+          tA: Number(p?.tA) || 0,
+          tB: Number(p?.tB) || 0,
+          locked: i === 0 || i === anchors.length - 1,
+        }))
+        .sort((a, b) => a.tA - b.tA);
+    }
+    return null;
+  }, [anchors]);
+
+  useEffect(() => {
+    if (!externalPairs || externalPairs.length < 2) return;
+    // adopt external pairs & build warp
+    setPairs(externalPairs);
+    const mapping = externalPairs.map(({ tA, tB }) => ({ tA, tB }));
+    setWarp(buildWarp(mapping));
+    setRefMode(false);
+  }, [externalPairs]);
+
   useEffect(() => {
     let rafId;
     const update = () => {
@@ -244,18 +279,11 @@ export default function VideoPreview({
     const timeB = videoB.currentTime || 0;
     const timeA = currentTA;
 
-    setPairs((prevPairs) => {
-      const isEndpointLocked = prevPairs.find(
-        (pair) => pair.id === currentIdx
-      )?.locked;
-
-      // Remove any existing pair for this anchor index, then create the new one
-      const pairsWithoutCurrent = prevPairs.filter(
-        (pair) => pair.id !== currentIdx
-      );
-
+    setPairs((prev) => {
+      const isEndpointLocked = prev.find((p) => p.id === currentIdx)?.locked;
+      const without = prev.filter((p) => p.id !== currentIdx);
       return [
-        ...pairsWithoutCurrent,
+        ...without,
         { id: currentIdx, tA: timeA, tB: timeB, locked: !!isEndpointLocked },
       ].sort((p1, p2) => p1.id - p2.id);
     });
@@ -313,8 +341,18 @@ export default function VideoPreview({
   const durationB = videoB?.duration ?? 0;
 
   // anchors used here to make markers on the video timeline
+  const externalAnchorTimes = useMemo(() => {
+    if (!anchors) return [];
+    if (!Array.isArray(anchors)) return [];
+    if (anchors.length === 0) return [];
+    if (typeof anchors[0] === "number") return anchors;
+    return anchors.map((p) => Number(p?.tA) || 0);
+  }, [anchors]);
+
   const timelineAnchors = refMode
     ? sampleTimesA || []
+    : externalAnchorTimes.length
+    ? externalAnchorTimes
     : (pairs || []).map((p) => p.tA).filter((t) => Number.isFinite(t));
 
   const highlightAnchorAt = refMode ? currentTA : null;
@@ -333,7 +371,6 @@ export default function VideoPreview({
                   playsInline
                   preload="auto"
                   muted={isMutedA}
-                  defaultMuted={isMutedA}
                 />
                 <div className="hud">
                   <div className="tag">Car A</div>
@@ -358,7 +395,6 @@ export default function VideoPreview({
                   playsInline
                   preload="auto"
                   muted={isMutedB}
-                  defaultMuted={isMutedB}
                 />
                 <div className="hud">
                   <div className="tag">Car B</div>
@@ -385,7 +421,6 @@ export default function VideoPreview({
                 playsInline
                 preload="auto"
                 muted={overlayTop === "A" ? isMutedB : isMutedA}
-                defaultMuted={overlayTop === "A" ? isMutedB : isMutedA}
               />
 
               {/* Top layer */}
@@ -393,11 +428,9 @@ export default function VideoPreview({
                 ref={overlayTop === "A" ? videoARef : videoBRef}
                 src={(overlayTop === "A" ? videoA?.url : videoB?.url) || ""}
                 playsInline
-                preload="auto"
                 className="overlay-top"
                 style={{ "--overlay-alpha": overlayAlpha }}
                 muted={overlayTop === "A" ? isMutedA : isMutedB}
-                defaultMuted={overlayTop === "A" ? isMutedA : isMutedB}
               />
 
               {/* Overlay HUD slider */}

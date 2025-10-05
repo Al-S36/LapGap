@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import Header from "./components/Header.jsx";
+import Header from "./components/header.jsx";
 import UploadArea from "./components/UploadArea.jsx";
 import VideoPreview from "./components/videoPreview.jsx";
 import StatsStrip from "./components/statsStrip.jsx";
@@ -7,6 +7,12 @@ import Footer from "./components/footer.jsx";
 import DeltaCard from "./components/deltaCard.jsx";
 import TrackSettings from "./components/TrackSettings.jsx";
 import generateReport from "./components/services/generateReport.js";
+import {
+  createLapPack,
+  buildDefaultPackFilename,
+} from "./components/services/export/pack.js";
+import { downloadBlob } from "./components/services/export/donwload.js";
+import { readLapPack } from "./components/services/import/readPack.js";
 
 // styling
 import "./styling/base.css";
@@ -35,7 +41,7 @@ export default function App() {
 
   const sessionKey = `${videoA?.url ?? ""}|${videoB?.url ?? ""}`;
 
-  const [track, setTrack] = useState({ name: "", lengthKm: null });
+  const [track, setTrack] = useState({ name: "", lengthKm: "0.01" });
 
   // Stats lifted from StatsStrip for the PDF
   const [theoreticalBest, setTheoreticalBest] = useState(null);
@@ -53,7 +59,6 @@ export default function App() {
   useEffect(() => {
     deltaBucketsRef.current = new Array(101).fill(null);
     setDeltaSamples([]);
-    setAnchorPairs(null);
     setGlobalTime(0);
     setIsScrubbing(false);
   }, [videoA?.url, videoB?.url]);
@@ -98,8 +103,63 @@ export default function App() {
   const handleScrubStart = () => setIsScrubbing(true);
   const handleScrubEnd = () => setIsScrubbing(false);
 
-  // Enable header button only when both laps are present
+  // Import Pack (.zip)
+  const onImportPack = async (file) => {
+    try {
+      if (videoA?.url) URL.revokeObjectURL(videoA.url);
+      if (videoB?.url) URL.revokeObjectURL(videoB.url);
+
+      const pack = await readLapPack(file);
+
+      // Normalize anchors
+      const importedAnchors = Array.isArray(pack.anchors)
+        ? pack.anchors
+        : pack.anchors?.pairs || [];
+
+      setTrack(pack.track);
+      setAnchorPairs(importedAnchors);
+      setVideoA(pack.videoA);
+      setVideoB(pack.videoB);
+
+      // Reset session-coupled UI bits
+      deltaBucketsRef.current = new Array(101).fill(null);
+      setDeltaSamples([]);
+      setLiveDelta(0);
+      setGlobalTime(0);
+      setIsScrubbing(false);
+    } catch (err) {
+      console.error("Import failed:", err);
+      alert(err.message || "Import failed. See console for details.");
+    }
+  };
+
+  // Header buttons enablement
   const canGenerateReport = Boolean(videoA && videoB);
+  const canExportPack = Boolean(videoA?.file && videoB?.file);
+
+  // Export Pack (.zip) handler
+  const onExportPack = async () => {
+    // quick guard so we fail fast with a friendly message
+    if (!videoA?.file || !videoB?.file) {
+      alert("Upload both videos to export.");
+      return;
+    }
+
+    try {
+      const blob = await createLapPack({
+        track,
+        videoA,
+        videoB,
+        anchors: anchorPairs?.pairs ?? anchorPairs,
+      });
+
+      const filename = buildDefaultPackFilename(track?.name || "track");
+      downloadBlob(blob, filename);
+    } catch (err) {
+      console.error("Export failed:", err);
+      alert("Export failed. See console for details.");
+    }
+  };
 
   return (
     <div className="home-page">
@@ -109,23 +169,26 @@ export default function App() {
             track,
             videoA,
             videoB,
-            liveDelta, // OK to keep; ignored in table now
+            liveDelta,
             theoreticalBest,
             consistencyPct,
             leadSharePctA: Number.isFinite(leadSharePctA)
               ? Math.round(leadSharePctA)
               : null,
-            deltaSamples, // ← REQUIRED for charts without anchors (and kept as backup)
-            anchorPairs: anchorPairs?.pairs ?? anchorPairs, // ← REQUIRED for Segment Table / Cumulative Curve / Anchor Map
+            deltaSamples,
+            anchorPairs: anchorPairs?.pairs ?? anchorPairs,
           })
         }
         canGenerate={canGenerateReport}
+        onExportPack={onExportPack}
+        canExportPack={canExportPack}
+        onImportPack={onImportPack}
       />
 
       <main className="container">
-        {/* Track Settings */}
+        {/* Track Settings (populate from imported `track`) */}
         <section className="card">
-          <TrackSettings />
+          <TrackSettings value={track} />
         </section>
 
         {/* Uploaders */}
@@ -133,6 +196,7 @@ export default function App() {
           <UploadArea
             label="Car A"
             hint="Upload the faster lap here"
+            value={videoA}
             onLoaded={(media) =>
               setVideoA(media ? { ...media, title: titleA } : null)
             }
@@ -140,6 +204,7 @@ export default function App() {
           <UploadArea
             label="Car B"
             hint="Upload the slower lap here"
+            value={videoB}
             onLoaded={(media) =>
               setVideoB(media ? { ...media, title: titleB } : null)
             }
@@ -156,6 +221,7 @@ export default function App() {
           <VideoPreview
             videoA={videoA}
             videoB={videoB}
+            anchors={anchorPairs?.pairs ?? anchorPairs}
             onDelta={(smoothed, progress, raw) => {
               setLiveDelta(smoothed);
               recordDeltaSample(progress, raw ?? smoothed);
@@ -179,7 +245,7 @@ export default function App() {
             deltaSamples={deltaSamples}
             sessionKey={sessionKey}
             anchorPairs={anchorPairs}
-            trackLengthKm={track.lengthKm}
+            trackLengthKm={track.lengthKm ?? null}
             // Lift values so PDF matches the UI
             onSummary={(s) => {
               if (!s) return;

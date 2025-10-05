@@ -14,6 +14,10 @@ If you are developing a production application, we recommend using TypeScript wi
 
 # Change log
 
+## [0.2.9] - 2025-10-05
+- Feature: Can export sessions as zips with all data saved
+- Feature: Can import sessions as zips with all data stored
+
 ## [0.2.8] - 2025-09-29
 - Feature: added markers to the timeline
 - Bug: fixed variable name in the tiemscrubber

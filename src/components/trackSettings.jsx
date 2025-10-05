@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect, useRef } from "react";
 import "../styling/trackSettings.css";
 
 // Custom event so parent can listen
@@ -28,7 +28,11 @@ const powerToWeight = (hp, kg) => {
   return +(hp / kg).toFixed(3);
 };
 
-export default function TrackSettings() {
+const fmt2 = (n) => (Number.isFinite(n) ? n.toFixed(2) : "");
+const strOrEmpty = (s) =>
+  typeof s === "string" ? s : s == null ? "" : String(s);
+
+export default function TrackSettings({ value }) {
   const [form, setForm] = useState({ name: "", lengthKm: "" });
 
   const [carA, setCarA] = useState({
@@ -45,6 +49,62 @@ export default function TrackSettings() {
   });
 
   // Always normalize blanks to "N/A"
+  const isHydratingRef = useRef(false);
+
+  // Populate from imported value
+  useEffect(() => {
+    if (!value) return;
+    isHydratingRef.current = true;
+
+    const lengthNum = Number.isFinite(value?.lengthKmNum)
+      ? value.lengthKmNum
+      : Number.isFinite(+value?.lengthKm)
+      ? +value.lengthKm
+      : null;
+
+    setForm({
+      name: strOrEmpty(value?.name),
+      lengthKm:
+        lengthNum != null
+          ? lengthNum.toFixed(2)
+          : strOrEmpty(value?.lengthKm) || "",
+    });
+
+    const videoA = value?.cars?.A || {};
+    const videoB = value?.cars?.B || {};
+
+    const aWeight = Number.isFinite(videoA.carWeightKgNum)
+      ? videoA.carWeightKgNum
+      : toNumOrNull(videoA.carWeightKg);
+    const aPower = Number.isFinite(videoA.carPowerHpNum)
+      ? videoA.carPowerHpNum
+      : toNumOrNull(videoA.carPowerHp);
+
+    const bWeight = Number.isFinite(videoB.carWeightKgNum)
+      ? videoB.carWeightKgNum
+      : toNumOrNull(videoB.carWeightKg);
+    const bPower = Number.isFinite(videoB.carPowerHpNum)
+      ? videoB.carPowerHpNum
+      : toNumOrNull(videoB.carPowerHp);
+
+    setCarA({
+      driverName: strOrEmpty(videoA.driverName),
+      carModel: strOrEmpty(videoA.carModel),
+      carWeightKg: fmt2(aWeight),
+      carPowerHp: fmt2(aPower),
+    });
+    setCarB({
+      driverName: strOrEmpty(videoB.driverName),
+      carModel: strOrEmpty(videoB.carModel),
+      carWeightKg: fmt2(bWeight),
+      carPowerHp: fmt2(bPower),
+    });
+
+    // allow UI to render before enabling emits
+    setTimeout(() => (isHydratingRef.current = false), 0);
+  }, [value]);
+
+  // Normalize blanks to "N/A" for outbound payload
   const normalizeCar = (car) => {
     const driverName = car.driverName?.trim() || "N/A";
     const carModel = car.carModel?.trim() || "N/A";
@@ -88,7 +148,7 @@ export default function TrackSettings() {
       lengthKm: inputValue,
     });
 
-    emitTrackSettings(form.name, inputValue, carsPayload);
+    if (!isHydratingRef.current) emitTrackSettings(form.name, inputValue, carsPayload);
   };
 
   // Round up to 2 decimal places
@@ -104,10 +164,12 @@ export default function TrackSettings() {
     if (numericValue > 0 && Number.isFinite(numericValue)) {
       const formatted = numericValue.toFixed(2);
       setForm({ name: form.name, lengthKm: formatted });
-      emitTrackSettings(form.name, formatted, carsPayload);
+      if (!isHydratingRef.current)
+        emitTrackSettings(form.name, formatted, carsPayload);
     } else {
       setForm({ name: form.name, lengthKm: "" });
-      emitTrackSettings(form.name, "", carsPayload);
+      if (!isHydratingRef.current)
+        emitTrackSettings(form.name, "", carsPayload);
     }
   };
 
@@ -136,7 +198,8 @@ export default function TrackSettings() {
     } else {
       setCarB({ ...carB, [key]: inputValue });
     }
-    emitTrackSettings(form.name, form.lengthKm, carsPayload);
+    if (!isHydratingRef.current)
+      emitTrackSettings(form.name, form.lengthKm, carsPayload);
   };
 
   const handleCarNumericBlur = (which, key, val) => {
@@ -164,7 +227,8 @@ export default function TrackSettings() {
     } else {
       setCarB({ ...carB, [key]: formatted });
     }
-    emitTrackSettings(form.name, form.lengthKm, carsPayload);
+    if (!isHydratingRef.current)
+      emitTrackSettings(form.name, form.lengthKm, carsPayload);
   };
 
   return (
@@ -182,8 +246,10 @@ export default function TrackSettings() {
               placeholder="e.g., Manja Circuit"
               value={form.name}
               onChange={(e) => {
-                setForm({ name: e.target.value, lengthKm: form.lengthKm });
-                emitTrackSettings(e.target.value, form.lengthKm, carsPayload);
+                const name = e.target.value;
+                setForm({ name, lengthKm: form.lengthKm });
+                if (!isHydratingRef.current)
+                  emitTrackSettings(name, form.lengthKm, carsPayload);
               }}
               autoComplete="off"
             />
@@ -229,6 +295,10 @@ export default function TrackSettings() {
               placeholder="Driver name"
               value={carA.driverName}
               onChange={(e) => setCarA({ ...carA, driverName: e.target.value })}
+              onBlur={() => {
+                if (!isHydratingRef.current)
+                  emitTrackSettings(form.name, form.lengthKm, carsPayload);
+              }}
               autoComplete="off"
             />
           </div>
@@ -243,6 +313,10 @@ export default function TrackSettings() {
               placeholder="Car model"
               value={carA.carModel}
               onChange={(e) => setCarA({ ...carA, carModel: e.target.value })}
+              onBlur={() => {
+                if (!isHydratingRef.current)
+                  emitTrackSettings(form.name, form.lengthKm, carsPayload);
+              }}
               autoComplete="off"
             />
           </div>
@@ -300,6 +374,10 @@ export default function TrackSettings() {
               placeholder="Driver name"
               value={carB.driverName}
               onChange={(e) => setCarB({ ...carB, driverName: e.target.value })}
+              onBlur={() => {
+                if (!isHydratingRef.current)
+                  emitTrackSettings(form.name, form.lengthKm, carsPayload);
+              }}
               autoComplete="off"
             />
           </div>
@@ -314,6 +392,10 @@ export default function TrackSettings() {
               placeholder="Car model"
               value={carB.carModel}
               onChange={(e) => setCarB({ ...carB, carModel: e.target.value })}
+              onBlur={() => {
+                if (!isHydratingRef.current)
+                  emitTrackSettings(form.name, form.lengthKm, carsPayload);
+              }}
               autoComplete="off"
             />
           </div>
