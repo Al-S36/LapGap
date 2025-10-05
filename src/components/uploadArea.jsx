@@ -4,7 +4,7 @@ import getFps from "./services/getFps";
 // Responsible for the Upload section, allows the user to add the two videos
 // and pulls all the meta data from the videos, it then sends the data to preview and stats
 
-export default function UploadArea({ label = "Car", hint, onLoaded }) {
+export default function UploadArea({ label = "Car", hint, onLoaded, value }) {
   // fileInputRef used to call the input
   const fileInputRef = useRef(null);
   // Store the vidoe metadata
@@ -95,11 +95,10 @@ export default function UploadArea({ label = "Car", hint, onLoaded }) {
   };
 
   // When component unmounts, revoke the last created object
-  useEffect(() => {
-    return () => {
-      revokeLastUrl();
-    };
-  }, []);
+  useEffect(() => () => revokeLastUrl(), []);
+
+  // Preferred display source, external `value` from import
+  const displayMeta = value ?? videoMetadata;
 
   return (
     <div className="upload-container">
@@ -133,32 +132,32 @@ export default function UploadArea({ label = "Car", hint, onLoaded }) {
             hidden
           />
           <span className="muted" style={{ fontSize: 13 }}>
-            {videoMetadata?.file?.name}
+            {displayMeta?.file?.name || ""}
           </span>
         </div>
       </div>
 
       <div className="upload-meta" style={{ marginTop: 8 }}>
-        {videoMetadata ? (
+        {displayMeta ? (
           <div className="meta-grid">
             <div>
-              <strong>Duration:</strong> {timeFormatter(videoMetadata.duration)}
+              <strong>Duration:</strong> {timeFormatter(displayMeta.duration)}
             </div>
             <div>
-              <strong>Resolution:</strong> {videoMetadata.width}×
-              {videoMetadata.height}px
+              <strong>Resolution:</strong> {displayMeta.width}×
+              {displayMeta.height}px
             </div>
             <div>
               <strong>FPS:</strong>{" "}
-              {videoMetadata.fps ? (
+              {displayMeta.fps ? (
                 <>
-                  {videoMetadata.fps} fps
-                  {videoMetadata.fpsMode ? ` (${videoMetadata.fpsMode})` : ""}
-                  {videoMetadata.fpsSource === "container" &&
-                  videoMetadata.isNominal
+                  {displayMeta.fps} fps
+                  {displayMeta.fpsMode ? ` (${displayMeta.fpsMode})` : ""}
+                  {displayMeta.fpsSource === "container" &&
+                  displayMeta.isNominal
                     ? " • nominal"
                     : ""}
-                  {videoMetadata.fpsSource === "playback" ? " - estimated" : ""}
+                  {displayMeta.fpsSource === "playback" ? " - estimated" : ""}
                 </>
               ) : (
                 <span className="muted">—</span>
