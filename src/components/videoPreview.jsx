@@ -19,18 +19,24 @@ export default function VideoPreview({
   onScrubStart,
   onScrubEnd,
 }) {
+  const containerRef = useRef(null);
+
   // References to each video element
   const videoARef = useRef(null);
   const videoBRef = useRef(null);
 
-  // Current playback times
-  const [timeA, setTimeA] = useState(0);
-  const [timeB, setTimeB] = useState(0);
+  // HUD spans (avoid re-render every frame)
+  const timeATextRef = useRef(null);
+  const timeBTextRef = useRef(null);
+  const totalATextRef = useRef(null);
+  const totalBTextRef = useRef(null);
 
   // overlay
   const [overlayMode, setOverlayMode] = useState(false);
   const [overlayTop, setOverlayTop] = useState("B");
   const [overlayAlpha, setOverlayAlpha] = useState(0.5);
+  const [useCanvasOverlay, setUseCanvasOverlay] = useState(false);
+  const canvasRef = useRef(null);
 
   // reference mode
   const [refMode, setRefMode] = useState(false);
@@ -38,7 +44,6 @@ export default function VideoPreview({
   const [pairs, setPairs] = useState([]);
   const [currentIdx, setCurrentIdx] = useState(0);
   const [warp, setWarp] = useState(null);
-  const [deltaSmoothed, setDeltaSmoothed] = useState(null);
 
   // Muted states, by defult its muted
   const [isMutedA, setIsMutedA] = useState(true);
@@ -52,9 +57,71 @@ export default function VideoPreview({
     if (videoB) videoB.muted = !!isMutedB;
   }, [isMutedA, isMutedB]);
 
-  const prevDeltaRef = useRef(null);
+  // Ready/Buffer indicators
+  const [readyA, setReadyA] = useState(false);
+  const [readyB, setReadyB] = useState(false);
+  const hasBothUrls = !!(videoA?.url && videoB?.url);
 
-  // Keep track of current playback time for each video
+  const computeReady = (video) => {
+    if (!video) return false;
+    if (video.readyState >= 3) return true;
+    if (video.readyState >= 2 && video.buffered?.length) {
+      const ct = video.currentTime || 0;
+      for (let i = 0; i < video.buffered.length; i++) {
+        const s = video.buffered.start(i);
+        const e = video.buffered.end(i);
+        if (ct >= s && ct + 3 <= e) return true;
+      }
+    }
+    return false;
+  };
+
+  useEffect(() => {
+    const A = videoARef.current;
+    const B = videoBRef.current;
+    if (!A || !B) return;
+
+    A.preload = "auto";
+    B.preload = "auto";
+
+    const updateA = () => setReadyA(computeReady(A));
+    const updateB = () => setReadyB(computeReady(B));
+
+    const showTotals = () => {
+      if (totalATextRef.current)
+        totalATextRef.current.textContent = timeFormatter(A.duration || 0);
+      if (totalBTextRef.current)
+        totalBTextRef.current.textContent = timeFormatter(B.duration || 0);
+    };
+
+    const evts = [
+      "loadedmetadata",
+      "loadeddata",
+      "canplay",
+      "canplaythrough",
+      "progress",
+      "timeupdate",
+      "waiting",
+      "stalled",
+    ];
+    evts.forEach((e) => A.addEventListener(e, updateA));
+    evts.forEach((e) => B.addEventListener(e, updateB));
+    A.addEventListener("loadedmetadata", showTotals);
+    B.addEventListener("loadedmetadata", showTotals);
+
+    updateA();
+    updateB();
+    showTotals();
+
+    return () => {
+      evts.forEach((e) => A.removeEventListener(e, updateA));
+      evts.forEach((e) => B.removeEventListener(e, updateB));
+      A.removeEventListener("loadedmetadata", showTotals);
+      B.removeEventListener("loadedmetadata", showTotals);
+    };
+  }, [videoA?.url, videoB?.url]);
+
+  // External anchors -> internal
   const externalPairs = useMemo(() => {
     if (!anchors) return null;
     // support [{tA,tB}] or seconds[] (assume 1:1)
@@ -89,58 +156,92 @@ export default function VideoPreview({
     setRefMode(false);
   }, [externalPairs]);
 
-  useEffect(() => {
-    let rafId;
-    const update = () => {
-      const videoA = videoARef.current;
-      const videoB = videoBRef.current;
+  // Throttled HUD + delta (15 Hz)
+  const lastTickRef = useRef(0);
+  const TICK_MS = 1000 / 15;
+  const rafIdRef = useRef(0);
+  const rvfcActiveRef = useRef(false);
 
-      if (videoA) setTimeA(videoA.currentTime || 0);
-      if (videoB) setTimeB(videoB.currentTime || 0);
+  const updateLoop = () => {
+    const A = videoARef.current;
+    const B = videoBRef.current;
+    if (!A || !B) {
+      rafIdRef.current = requestAnimationFrame(updateLoop);
+      return;
+    }
 
-      if (videoA && videoB) {
-        const currentTimeA = videoA.currentTime || 0;
-        const currentTimeB = videoB.currentTime || 0;
+    const now = performance.now();
+    if (now - lastTickRef.current >= TICK_MS) {
+      lastTickRef.current = now;
 
-        // Publish live times upward so it can update global thumb when not scrubbing
-        if (typeof onTimes === "function") {
-          onTimes({ timeA: currentTimeA, timeB: currentTimeB });
-        }
+      const tA = A.currentTime || 0;
+      const tB = B.currentTime || 0;
 
-        // If we have a warp mapping we use it otherwise we use the raw differenbce
-        let rawDelta;
-        if (warp) {
-          const mappedTimeB = mapAtoB(warp, currentTimeA);
-          rawDelta = mappedTimeB - currentTimeA || 0;
+      if (timeATextRef.current)
+        timeATextRef.current.textContent = timeFormatter(tA);
+      if (timeBTextRef.current)
+        timeBTextRef.current.textContent = timeFormatter(tB);
+
+      let rawDelta = warp ? mapAtoB(warp, tA) - tA || 0 : tB - tA || 0;
+
+      // Soft-sync B to A
+      if (!refMode && !A.paused && !B.paused) {
+        const MAX_RATE_ADJ = 0.08;
+        const KP = 0.5;
+        const BIG_DELTA = 0.35;
+        const SEEK_STEP = 0.15;
+
+        if (Math.abs(rawDelta) < BIG_DELTA) {
+          const targetRate =
+            1 + clamp(-KP * rawDelta, -MAX_RATE_ADJ, MAX_RATE_ADJ);
+          if (Math.abs(B.playbackRate - targetRate) > 0.001)
+            B.playbackRate = targetRate;
         } else {
-          rawDelta = currentTimeB - currentTimeA || 0;
+          const dir = Math.sign(rawDelta);
+          const target = clamp(
+            (B.currentTime || 0) - dir * SEEK_STEP,
+            0,
+            B.duration || 0
+          );
+          if (Math.abs((B.currentTime || 0) - target) > 0.001)
+            B.currentTime = target;
+          if (Math.abs(B.playbackRate - 1) > 0.001) B.playbackRate = 1;
         }
-
-        // Smooth for readability
-        const smoothingFactor = 0.3;
-        const prev = prevDeltaRef.current;
-        const smoothed =
-          prev == null
-            ? rawDelta
-            : smoothingFactor * rawDelta + (1 - smoothingFactor) * prev;
-
-        prevDeltaRef.current = smoothed;
-        setDeltaSmoothed(smoothed);
-
-        // Progress along lap A
-        const durationA = videoA.duration || 0;
-        const progress =
-          durationA > 0 ? clamp(currentTimeA / durationA, 0, 1) : 0;
-
-        // Send smoothed, progress, raw
-        if (onDelta) onDelta(smoothed, progress, rawDelta);
+      } else {
+        if (B && Math.abs(B.playbackRate - 1) > 0.001) B.playbackRate = 1;
       }
-      rafId = requestAnimationFrame(update);
-    };
-    rafId = requestAnimationFrame(update);
-    return () => cancelAnimationFrame(rafId);
+
+      if (typeof onTimes === "function") onTimes({ timeA: tA, timeB: tB });
+      if (typeof onDelta === "function") {
+        const progress = A.duration > 0 ? clamp(tA / A.duration, 0, 1) : 0;
+        onDelta(rawDelta * 0.7, progress, rawDelta);
+      }
+    }
+
+    rafIdRef.current = requestAnimationFrame(updateLoop);
+  };
+
+  useEffect(() => {
+    const A = videoARef.current;
+    const supportsRVFC = A && typeof A.requestVideoFrameCallback === "function";
+    if (supportsRVFC) {
+      const step = () => {
+        updateLoop();
+        if (rvfcActiveRef.current) A.requestVideoFrameCallback(step);
+      };
+      rvfcActiveRef.current = true;
+      A.requestVideoFrameCallback(step);
+      return () => {
+        rvfcActiveRef.current = false;
+      };
+    } else {
+      rafIdRef.current = requestAnimationFrame(updateLoop);
+      return () => cancelAnimationFrame(rafIdRef.current);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [warp, onDelta, onTimes]);
 
+  // Seek from parent
   useEffect(() => {
     if (!Number.isFinite(seekTo)) return;
     const videoA = videoARef.current;
@@ -155,13 +256,115 @@ export default function VideoPreview({
     }
   }, [seekTo]);
 
-  // The play back controls
-  const onPlay = () => playBoth(videoARef.current, videoBRef.current);
-  const onPause = () => pauseBoth(videoARef.current, videoBRef.current);
+  // Stall recovery
+  const jumpToNearestBuffered = (v) => {
+    if (!v || !v.buffered || v.buffered.length === 0) return false;
+    const t = v.currentTime || 0;
+    for (let i = 0; i < v.buffered.length; i++) {
+      const s = v.buffered.start(i);
+      const e = v.buffered.end(i);
+      if (t >= s && t <= e) {
+        const margin = 0.08;
+        if (t > e - margin && i + 1 < v.buffered.length) {
+          v.currentTime = v.buffered.start(i + 1) + margin;
+          return true;
+        }
+        return false;
+      }
+    }
+    const nextStart = v.buffered.start(0);
+    if (nextStart > t) {
+      v.currentTime = nextStart + 0.02;
+      return true;
+    }
+    return false;
+  };
+
+  useEffect(() => {
+    const A = videoARef.current,
+      B = videoBRef.current;
+    if (!A || !B) return;
+    const onA = () => jumpToNearestBuffered(A);
+    const onB = () => jumpToNearestBuffered(B);
+    ["waiting", "stalled"].forEach((ev) => {
+      A.addEventListener(ev, onA);
+      B.addEventListener(ev, onB);
+    });
+    return () => {
+      ["waiting", "stalled"].forEach((ev) => {
+        A.removeEventListener(ev, onA);
+        B.removeEventListener(ev, onB);
+      });
+    };
+  }, [videoA?.url, videoB?.url]);
+
+  // Off-screen pause (saves CPU/GPU)
+  useEffect(() => {
+    const root = containerRef.current;
+    if (!root) return;
+    const A = videoARef.current,
+      B = videoBRef.current;
+    const io = new IntersectionObserver(
+      ([entry]) => {
+        if (!entry?.isIntersecting) pauseBoth(A, B);
+      },
+      { threshold: 0 }
+    );
+    io.observe(root);
+    return () => io.disconnect();
+  }, []);
+
+  // Pause on hidden tab
+  useEffect(() => {
+    const onVis = () => {
+      if (document.hidden) pauseBoth(videoARef.current, videoBRef.current);
+    };
+    document.addEventListener("visibilitychange", onVis);
+    return () => document.removeEventListener("visibilitychange", onVis);
+  }, []);
+
+  // Controls
+  const tryPlayWhenReady = (el) =>
+    new Promise((resolve) => {
+      el.play()
+        .catch(() => {
+          const fn = () => {
+            el.removeEventListener("canplay", fn);
+            el.play().finally(resolve);
+          };
+          el.addEventListener("canplay", fn, { once: true });
+        })
+        .then(resolve);
+    });
+
+  const onPlay = () => {
+    const A = videoARef.current,
+      B = videoBRef.current;
+    if (!A || !B) return;
+    A.playbackRate = 1;
+    B.playbackRate = 1;
+    tryPlayWhenReady(A);
+    tryPlayWhenReady(B);
+  };
+
+  const onPause = () => {
+    const A = videoARef.current,
+      B = videoBRef.current;
+    pauseBoth(A, B);
+    if (A) A.playbackRate = 1;
+    if (B) B.playbackRate = 1;
+  };
+
   const onReset = () => {
-    resetBoth(videoARef.current, videoBRef.current);
-    setTimeA(0);
-    setTimeB(0);
+    const A = videoARef.current,
+      B = videoBRef.current;
+    resetBoth(A, B);
+    if (timeATextRef.current)
+      timeATextRef.current.textContent = timeFormatter(0);
+    if (timeBTextRef.current)
+      timeBTextRef.current.textContent = timeFormatter(0);
+    if (A) A.playbackRate = 1;
+    if (B) B.playbackRate = 1;
   };
 
   // Ready to start reference/alignment mode?
@@ -357,8 +560,84 @@ export default function VideoPreview({
 
   const highlightAnchorAt = refMode ? currentTA : null;
 
+  // Fast scrubbing
+  const handleSeek = (t) => {
+    const A = videoARef.current;
+    const B = videoBRef.current;
+    if (A) A.fastSeek ? A.fastSeek(t) : (A.currentTime = t);
+    if (B) B.fastSeek ? B.fastSeek(t) : (B.currentTime = t);
+    onSeek?.(t);
+  };
+
+  // Resize canvas to container for crisp rendering (devicePixelRatio aware)
+  useEffect(() => {
+    if (!(overlayMode && useCanvasOverlay)) return;
+    const host = containerRef.current;
+    const canvas = canvasRef.current;
+    if (!host || !canvas) return;
+
+    const ro = new ResizeObserver(() => {
+      const dpr = Math.max(1, window.devicePixelRatio || 1);
+      const cw = host.clientWidth;
+      const ch = host.clientHeight;
+      canvas.width = Math.max(1, Math.floor(cw * dpr));
+      canvas.height = Math.max(1, Math.floor(ch * dpr));
+      canvas.style.width = `${cw}px`;
+      canvas.style.height = `${ch}px`;
+    });
+    ro.observe(host);
+    return () => ro.disconnect();
+  }, [overlayMode, useCanvasOverlay]);
+
+  useEffect(() => {
+    if (!(overlayMode && useCanvasOverlay)) return;
+    const A = videoARef.current;
+    const B = videoBRef.current;
+    const canvas = canvasRef.current;
+    if (!A || !B || !canvas) return;
+    const ctx = canvas.getContext("2d");
+
+    let stop = false;
+    const drawContain = (video) => {
+      if (!video || !video.videoWidth || !video.videoHeight) return;
+      const cw = canvas.width,
+        ch = canvas.height;
+      const vw = video.videoWidth,
+        vh = video.videoHeight;
+      const scale = Math.min(cw / vw, ch / vh);
+      const dw = Math.floor(vw * scale);
+      const dh = Math.floor(vh * scale);
+      const dx = (cw - dw) / 2;
+      const dy = (ch - dh) / 2;
+      ctx.drawImage(video, dx, dy, dw, dh);
+    };
+
+    const loop = () => {
+      if (stop) return;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      const base = overlayTop === "A" ? B : A;
+      const top = overlayTop === "A" ? A : B;
+
+      drawContain(base);
+      ctx.globalAlpha = overlayAlpha;
+      drawContain(top);
+      ctx.globalAlpha = 1;
+
+      requestAnimationFrame(loop);
+    };
+    requestAnimationFrame(loop);
+    return () => {
+      stop = true;
+    };
+  }, [overlayMode, useCanvasOverlay, overlayTop, overlayAlpha]);
+
   return (
-    <div className="preview-container">
+    <div
+      ref={containerRef}
+      className="preview-container"
+      style={{ contain: "layout paint", willChange: "transform" }}
+    >
       {!overlayMode ? (
         <div className="players responsive-grid-2">
           {/* Car A */}
@@ -371,12 +650,19 @@ export default function VideoPreview({
                   playsInline
                   preload="auto"
                   muted={isMutedA}
+                  disablePictureInPicture
+                  style={{ willChange: "transform" }}
                 />
                 <div className="hud">
                   <div className="tag">Car A</div>
                   <div className="time">
-                    {timeFormatter(timeA)} /{" "}
-                    {timeFormatter(videoA.duration || 0)}
+                    <span ref={timeATextRef}>00:00.000</span> /{" "}
+                    <span ref={totalATextRef}>00:00.000</span>
+                    {!readyA && (
+                      <span className="muted" style={{ marginLeft: 8 }}>
+                        buffering…
+                      </span>
+                    )}
                   </div>
                 </div>
               </>
@@ -395,12 +681,19 @@ export default function VideoPreview({
                   playsInline
                   preload="auto"
                   muted={isMutedB}
+                  disablePictureInPicture
+                  style={{ willChange: "transform" }}
                 />
                 <div className="hud">
                   <div className="tag">Car B</div>
                   <div className="time">
-                    {timeFormatter(timeB)} /{" "}
-                    {timeFormatter(videoB.duration || 0)}
+                    <span ref={timeBTextRef}>00:00.000</span> /{" "}
+                    <span ref={totalBTextRef}>00:00.000</span>
+                    {!readyB && (
+                      <span className="muted" style={{ marginLeft: 8 }}>
+                        buffering…
+                      </span>
+                    )}
                   </div>
                 </div>
               </>
@@ -410,28 +703,73 @@ export default function VideoPreview({
           </div>
         </div>
       ) : (
-        /* Overlay layout */
+        // Overlay layout
         <div className="player overlay-stack">
           {videoA?.url && videoB?.url ? (
             <>
-              {/* Base layer */}
-              <video
-                ref={overlayTop === "A" ? videoBRef : videoARef}
-                src={(overlayTop === "A" ? videoB?.url : videoA?.url) || ""}
-                playsInline
-                preload="auto"
-                muted={overlayTop === "A" ? isMutedB : isMutedA}
-              />
+              {useCanvasOverlay ? (
+                <>
+                  {/* Keep videos decoding but off-screen to avoid compositing cost */}
+                  <video
+                    ref={overlayTop === "A" ? videoBRef : videoARef}
+                    src={(overlayTop === "A" ? videoB?.url : videoA?.url) || ""}
+                    playsInline
+                    preload="auto"
+                    muted={overlayTop === "A" ? isMutedB : isMutedA}
+                    disablePictureInPicture
+                    style={{
+                      position: "absolute",
+                      left: -10000,
+                      top: -10000,
+                      width: 1,
+                      height: 1,
+                    }}
+                  />
+                  <video
+                    ref={overlayTop === "A" ? videoARef : videoBRef}
+                    src={(overlayTop === "A" ? videoA?.url : videoB?.url) || ""}
+                    playsInline
+                    preload="auto"
+                    muted={overlayTop === "A" ? isMutedA : isMutedB}
+                    disablePictureInPicture
+                    style={{
+                      position: "absolute",
+                      left: -10000,
+                      top: -10000,
+                      width: 1,
+                      height: 1,
+                    }}
+                  />
+                  <canvas ref={canvasRef} className="overlay-canvas" />
+                </>
+              ) : (
+                <>
+                  {/* Base layer */}
+                  <video
+                    ref={overlayTop === "A" ? videoBRef : videoARef}
+                    src={(overlayTop === "A" ? videoB?.url : videoA?.url) || ""}
+                    playsInline
+                    preload="auto"
+                    muted={overlayTop === "A" ? isMutedB : isMutedA}
+                    disablePictureInPicture
+                    style={{ willChange: "opacity, transform" }}
+                  />
 
-              {/* Top layer */}
-              <video
-                ref={overlayTop === "A" ? videoARef : videoBRef}
-                src={(overlayTop === "A" ? videoA?.url : videoB?.url) || ""}
-                playsInline
-                className="overlay-top"
-                style={{ "--overlay-alpha": overlayAlpha }}
-                muted={overlayTop === "A" ? isMutedA : isMutedB}
-              />
+                  {/* Top layer */}
+                  <video
+                    ref={overlayTop === "A" ? videoARef : videoBRef}
+                    src={(overlayTop === "A" ? videoA?.url : videoB?.url) || ""}
+                    playsInline
+                    className="overlay-top"
+                    style={{
+                      "--overlay-alpha": overlayAlpha,
+                      willChange: "opacity, transform",
+                    }}
+                    muted={overlayTop === "A" ? isMutedA : isMutedB}
+                    disablePictureInPicture
+                  />
+                </>
+              )}
 
               {/* Overlay HUD slider */}
               <div className="hud hud-br">
@@ -462,15 +800,25 @@ export default function VideoPreview({
               <div className="hud">
                 <div className="tag">Car A</div>
                 <div className="time">
-                  {timeFormatter(timeA)} /{" "}
-                  {timeFormatter(videoA?.duration || 0)}
+                  <span ref={timeATextRef}>00:00.000</span> /{" "}
+                  <span ref={totalATextRef}>00:00.000</span>
+                  {!readyA && (
+                    <span className="muted" style={{ marginLeft: 8 }}>
+                      buffering…
+                    </span>
+                  )}
                 </div>
               </div>
               <div className="hud hud-stack2">
                 <div className="tag">Car B</div>
                 <div className="time">
-                  {timeFormatter(timeB)} /{" "}
-                  {timeFormatter(videoB?.duration || 0)}
+                  <span ref={timeBTextRef}>00:00.000</span> /{" "}
+                  <span ref={totalBTextRef}>00:00.000</span>
+                  {!readyB && (
+                    <span className="muted" style={{ marginLeft: 8 }}>
+                      buffering…
+                    </span>
+                  )}
                 </div>
               </div>
             </>
@@ -488,7 +836,7 @@ export default function VideoPreview({
           durationA={durationA}
           durationB={durationB}
           value={globalTime}
-          onSeek={onSeek}
+          onSeek={handleSeek}
           onSeekStart={onScrubStart}
           onSeekEnd={onScrubEnd}
           anchors={timelineAnchors}
@@ -505,11 +853,7 @@ export default function VideoPreview({
         </div>
 
         <div className="cluster center">
-          <button
-            className="btn"
-            onClick={onPlay}
-            disabled={!videoA || !videoB}
-          >
+          <button className="btn" onClick={onPlay} disabled={!hasBothUrls}>
             Play
           </button>
           <button className="btn" onClick={onPause}>
@@ -550,6 +894,16 @@ export default function VideoPreview({
             disabled={!overlayMode}
           >
             Swap Top ({overlayTop})
+          </button>
+
+          {/* Canvas performance mode toggle (only meaningful in overlay) */}
+          <button
+            className={`btn ${useCanvasOverlay ? "active" : ""}`}
+            onClick={() => setUseCanvasOverlay((v) => !v)}
+            disabled={!overlayMode}
+            title="Render overlay via Canvas to reduce compositing cost"
+          >
+            Perf Mode: {useCanvasOverlay ? "Canvas" : "DOM"}
           </button>
         </div>
 
