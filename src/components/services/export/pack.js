@@ -179,9 +179,9 @@ export async function createLapPack(session = {}) {
     ...(settingsJson
       ? { "data/settings.json": strToU8(JSON.stringify(settingsJson, null, 2)) }
       : {}),
-    // Raw video bytes
-    [pathVideoA]: mediaA,
-    [pathVideoB]: mediaB,
+    // Raw video bytes (store/no-compress to avoid heavy CPU/memory)
+    [pathVideoA]: [mediaA, { level: 0 }],
+    [pathVideoB]: [mediaB, { level: 0 }],
   };
 
   // Build manifest.json: record size, sha256, and mime for every file.
@@ -189,9 +189,12 @@ export async function createLapPack(session = {}) {
   for (const [path, data] of Object.entries(files)) {
     if (path === "manifest.json" || path === "index.json") continue;
 
+    // Support [Uint8Array, {level}] tuples
+    const payload = Array.isArray(data) ? data[0] : data;
+
     // File size in bytes
     const bytes =
-      data instanceof Uint8Array ? data.byteLength : data?.length || 0;
+      payload instanceof Uint8Array ? payload.byteLength : payload?.length || 0;
 
     // MIME type: JSON for data/*, video mime for media/*
     const mime = path.startsWith("media/")
@@ -202,11 +205,12 @@ export async function createLapPack(session = {}) {
 
     // Exact bytes to hash (handle Uint8Array views safely)
     const bufForHash =
-      data instanceof Uint8Array
-        ? data.byteOffset === 0 && data.byteLength === data.buffer.byteLength
-          ? data.buffer
-          : data.slice().buffer
-        : data;
+      payload instanceof Uint8Array
+        ? payload.byteOffset === 0 &&
+          payload.byteLength === payload.buffer.byteLength
+          ? payload.buffer
+          : payload.slice().buffer
+        : payload;
 
     // SHA-256 of the file contents
     const sha256 = await sha256Hex(bufForHash);
@@ -245,7 +249,7 @@ export async function createLapPack(session = {}) {
   };
   files["index.json"] = strToU8(JSON.stringify(index, null, 2));
 
-  // Zip everything client side
+  // Zip everything client side (JSON compressed, videos stored)
   const zipped = zipSync(files, { level: 6 });
   return new Blob([zipped], { type: "application/zip" });
 }
@@ -259,5 +263,5 @@ export function buildDefaultPackFilename(
   const YYYY = when.getFullYear();
   const MM = String(when.getMonth() + 1).padStart(2, "0");
   const DD = String(when.getDate()).padStart(2, "0");
-  return `lapgap-pack-${slug}-${YYYY}${MM}${DD}.zip`;
+  return `lapgap-pack-${slug}-${DD}-${MM}-${YYYY}.zip`;
 }
