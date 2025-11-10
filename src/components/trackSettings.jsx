@@ -33,6 +33,7 @@ const strOrEmpty = (s) =>
   typeof s === "string" ? s : s == null ? "" : String(s);
 
 export default function TrackSettings({ value }) {
+  // ✅ default: empty field (placeholder shows 0.00)
   const [form, setForm] = useState({ name: "", lengthKm: "" });
 
   const [carA, setCarA] = useState({
@@ -56,18 +57,26 @@ export default function TrackSettings({ value }) {
     if (!value) return;
     isHydratingRef.current = true;
 
-    const lengthNum = Number.isFinite(value?.lengthKmNum)
+    // Parse length from either numeric or string input
+    const hasNum = Number.isFinite(value?.lengthKmNum);
+    const hasStr = value?.lengthKm != null && Number.isFinite(+value.lengthKm);
+    let hydratedLen = hasNum
       ? value.lengthKmNum
-      : Number.isFinite(+value?.lengthKm)
+      : hasStr
       ? +value.lengthKm
       : null;
 
+    if (
+      hydratedLen === 0.01 ||
+      (Number.isFinite(hydratedLen) && hydratedLen <= 0)
+    ) {
+      hydratedLen = null;
+    }
+
     setForm({
       name: strOrEmpty(value?.name),
-      lengthKm:
-        lengthNum != null
-          ? lengthNum.toFixed(2)
-          : strOrEmpty(value?.lengthKm) || "",
+      // Keep raw number as string
+      lengthKm: hydratedLen != null ? String(hydratedLen) : "",
     });
 
     const videoA = value?.cars?.A || {};
@@ -143,19 +152,25 @@ export default function TrackSettings({ value }) {
     // allowing only one decimal point
     inputValue = inputValue.replace(/(\..*)\./g, "$1");
 
-    setForm({
-      name: form.name,
+    // Only update local form; do not emit on each keystroke
+    setForm((prev) => ({
+      ...prev,
       lengthKm: inputValue,
-    });
-
-    if (!isHydratingRef.current) emitTrackSettings(form.name, inputValue, carsPayload);
+    }));
   };
 
   // Round up to 2 decimal places
   const handleLengthBlur = () => {
     let inputValue = (form.lengthKm || "").trim();
 
-    // Error handiling if the user enters .1 it becomes 0.1
+    // If user leaves it blank, keep it blank and emit empty
+    if (inputValue === "") {
+      if (!isHydratingRef.current)
+        emitTrackSettings(form.name, "", carsPayload);
+      return;
+    }
+
+    // Error handling if the user enters .1 it becomes 0.1
     if (inputValue.startsWith(".")) inputValue = "0" + inputValue;
     if (inputValue.endsWith(".")) inputValue = inputValue.slice(0, -1);
 
@@ -163,11 +178,12 @@ export default function TrackSettings({ value }) {
 
     if (numericValue > 0 && Number.isFinite(numericValue)) {
       const formatted = numericValue.toFixed(2);
-      setForm({ name: form.name, lengthKm: formatted });
+      setForm((prev) => ({ ...prev, lengthKm: formatted }));
       if (!isHydratingRef.current)
         emitTrackSettings(form.name, formatted, carsPayload);
     } else {
-      setForm({ name: form.name, lengthKm: "" });
+      // Keep field empty and show placeholder
+      setForm((prev) => ({ ...prev, lengthKm: "" }));
       if (!isHydratingRef.current)
         emitTrackSettings(form.name, "", carsPayload);
     }
@@ -247,7 +263,7 @@ export default function TrackSettings({ value }) {
               value={form.name}
               onChange={(e) => {
                 const name = e.target.value;
-                setForm({ name, lengthKm: form.lengthKm });
+                setForm((prev) => ({ ...prev, name }));
                 if (!isHydratingRef.current)
                   emitTrackSettings(name, form.lengthKm, carsPayload);
               }}

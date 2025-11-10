@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState } from "react";
 import { createLapPack, buildDefaultPackFilename } from "../services/pack.js";
 import { downloadBlob } from "../services/download.js";
 
@@ -20,16 +20,13 @@ export default function ExportControls({
   // Only enabled if both videos are present
   const canExport = !!(videoA?.file && videoB?.file);
 
-  const defaultFilename = useMemo(
-    () => buildDefaultPackFilename(track?.name || "track"),
-    [track?.name]
-  );
-
   // Packing the blob then triggereing a download
   const handleExport = async () => {
     if (!canExport || busy) return;
     setBusy(true);
     try {
+      // Filename computed at export time to avoid stale dates
+      const filename = buildDefaultPackFilename(track?.name || "track");
       // Current session data
       const packBlob = await createLapPack({
         sessionId,
@@ -42,11 +39,11 @@ export default function ExportControls({
         settings,
         deltaSamples,
       });
-      downloadBlob(packBlob, defaultFilename);
+      downloadBlob(packBlob, filename);
     } catch (err) {
-      // Catch tpical faliures such as memory pressure or error reading the files
-      console.error("Export failed:", err);
-      alert("Export failed. See console for details.");
+      try {
+        alert("Export failed.");
+      } catch {}
     } finally {
       setBusy(false);
     }

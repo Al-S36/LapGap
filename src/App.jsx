@@ -11,7 +11,7 @@ import {
   createLapPack,
   buildDefaultPackFilename,
 } from "./components/services/export/pack.js";
-import { downloadBlob } from "./components/services/export/donwload.js";
+import { downloadBlob } from "./components/services/export/download.js";
 import { readLapPack } from "./components/services/import/readPack.js";
 
 // styling

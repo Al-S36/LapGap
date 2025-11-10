@@ -1,4 +1,4 @@
-import { unzipSync, strFromU8 } from "fflate";
+import { strFromU8 } from "fflate";
 import { validatePack } from "./validatePack.js";
 
 // Unpacks the zip file the user uploaded and return app-ready objects
@@ -7,16 +7,15 @@ export async function readLapPack(zipBlob) {
   const zipFile = await validatePack(zipBlob);
   if (!zipFile.valid) throw new Error(zipFile.error);
 
-  // Unzip files
-  const bytes = new Uint8Array(await zipBlob.arrayBuffer());
-  const files = unzipSync(bytes);
+  // Reuse the already unzipped files instead of unzipping again
+  const files = zipFile.files;
 
   // Helper to parse a JSON file from the zip
   const readJson = (path) => JSON.parse(strFromU8(files[path]));
 
   // Parse manifest and index first
-  const manifest = readJson("manifest.json");
-  const index = readJson("index.json");
+  const manifest = zipFile.manifest || readJson("manifest.json");
+  const index = zipFile.index || readJson("index.json");
   const pointer = index.pointers || {};
 
   // Load core JSON payloads

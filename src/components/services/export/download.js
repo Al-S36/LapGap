@@ -8,10 +8,13 @@ export function downloadBlob(blob, filename = "lapgap-pack.zip") {
   tempLink.href = url;
   tempLink.download = filename;
   document.body.appendChild(tempLink);
-  // Triggers the download
-  tempLink.click();
-  // Remove the element
-  tempLink.remove();
-  // To guarantee that the click uses the URL on every browser, defer invalidation
-  setTimeout(() => URL.revokeObjectURL(url), 0);
+  try {
+    // Triggers the download
+    tempLink.click();
+  } finally {
+    // Remove the element
+    tempLink.remove();
+    // To guarantee that the click uses the URL on every browser, defer invalidation
+    setTimeout(() => URL.revokeObjectURL(url), 0);
+  }
 }

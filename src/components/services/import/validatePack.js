@@ -87,5 +87,6 @@ export async function validatePack(zipBlob) {
     return { valid: false, error: `Missing: ${missingData.join(", ")}` };
   }
 
-  return { valid: true };
+  // Return parsed structures so we don't unzip/parse again later
+  return { valid: true, files, manifest, index };
 }
