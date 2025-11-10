@@ -4,9 +4,15 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
+    "prestart": "node src/components/services/ensure-deps.mjs",
+    "start": "vite",
+    "predev": "node src/components/services/ensure-deps.mjs",
     "dev": "vite",
+    "prebuild": "node src/components/services/ensure-deps.mjs",
     "build": "vite build",
+    "prelint": "node src/components/services/ensure-deps.mjs",
     "lint": "eslint .",
+    "prepreview": "node src/components/services/ensure-deps.mjs",
     "preview": "vite preview"
   },
   "dependencies": {
